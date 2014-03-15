@@ -28,3 +28,7 @@ python example.py
 ```
 
 This server is now started and listening on default port 8889 for commands. You can interact with it using the Web UI by visiting http://localhost:8889/
+
+### Things to do in the Console
+
+
