@@ -1,1 +1,1 @@
-from funcserver import FuncServer
+from funcserver import FuncServer, BaseHandler

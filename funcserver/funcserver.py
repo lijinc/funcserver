@@ -138,7 +138,7 @@ class WebLogHandler(logging.Handler):
 
     def emit(self, record):
         msg = self.format(record)
-        funcserver._send_log(msg)
+        self.funcserver._send_log(msg)
 
 class FuncServer(object):
     NAME = 'FuncServer'
@@ -172,6 +172,8 @@ class FuncServer(object):
 
         # all active websockets and their state
         self.websocks = {}
+
+        self.pre_start()
 
     def init_logger(self):
         log = logging.getLogger('')
@@ -216,14 +218,14 @@ class FuncServer(object):
         parser.add_argument('--port', default=self.DEFAULT_PORT,
             type=int, help='port to listen on for server')
 
+    def define_args(self, parser):
+        pass
+
     def define_python_namespace(self):
         return {'server': self, 'logging': logging}
 
     def define_template_namespace(self):
         return self.define_python_namespace()
-
-    def define_args(self, parser):
-        pass
 
     def pre_start(self):
         pass
