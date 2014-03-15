@@ -5,4 +5,6 @@ An abstraction to implement web accessible servers hosting any sort of functiona
 
 Installation
 ------------
+``` bash
 sudo pip install git+git://github.com/prashanthellina/funcserver.git
+```
