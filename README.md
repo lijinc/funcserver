@@ -9,6 +9,8 @@ sudo pip install git+git://github.com/prashanthellina/funcserver.git
 
 ## Usage
 
+### Basic example
+
 The following is the code to implement the most basic Functionality Server.
 
 ``` python
@@ -49,3 +51,42 @@ python example.py --port <port no>
 # you can import any python module here
 >>> import datetime
 ```
+
+### Calculation server (another example)
+
+You will find an example script in examples/ called calcserver.py. Let us run that and interact with it.
+
+``` bash
+python examples/calcserver.py
+```
+
+Open http://localhost:8889 in the browser to access the console.
+
+``` python
+# view the objects present in console env
+>>> dir()
+
+# Let us interact with the `api` object from here
+>>> api.add(10, 20)
+>>> api.mul(10, 20)
+>>> api.div(10, 20.0)
+```
+
+Now let us use the CalcServer API over HTTP. Open the following links in the browser.
+
+http://localhost:8899/api/add/10/20
+http://localhost:8899/api/mul/10/20
+http://localhost:8899/api/div/10/20.0
+http://localhost:8899/api/div/10/0
+
+The last URL must've caused an internal server error because we tried performing an illegal math operation.
+
+This CalcServer has been configured to take an additional command-line parameter to ignore division by zero errors. Let us use the prevent the error from being raised. Run the CalcServer as follows
+
+``` bash
+python examples/calcserver.py --ignore-divbyzero
+```
+
+Now retry the last division api call URL in the browser.
+
+examples/calcserver.py is a demonstration of how FuncServer can be used and what it offers. To understand more read the code in funcserver.py - It is very concise.
