@@ -74,14 +74,16 @@ Open http://localhost:8889 in the browser to access the console.
 
 Now let us use the CalcServer API over HTTP. Open the following links in the browser.
 
+```
 http://localhost:8899/api/add/10/20
 http://localhost:8899/api/mul/10/20
 http://localhost:8899/api/div/10/20.0
 http://localhost:8899/api/div/10/0
+```
 
 The last URL must've caused an internal server error because we tried performing an illegal math operation.
 
-This CalcServer has been configured to take an additional command-line parameter to ignore division by zero errors. Let us use the prevent the error from being raised. Run the CalcServer as follows
+This CalcServer has been configured to take an additional command-line parameter to ignore division by zero errors. Let us use that to prevent the error from being raised. Run CalcServer as follows
 
 ``` bash
 python examples/calcserver.py --ignore-divbyzero
