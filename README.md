@@ -56,10 +56,10 @@ python example.py --port <port no>
 
 ### Calculation server (another example)
 
-You will find an example script in examples/ called calcserver.py. Let us run that and interact with it.
+You will find an example script in examples/ called calc_server.py. Let us run that and interact with it.
 
 ``` bash
-python examples/calcserver.py
+python examples/calc_server.py
 ```
 
 Open http://localhost:8889 in the browser to access the console.
@@ -88,9 +88,23 @@ The last URL must've caused an internal server error because we tried performing
 This CalcServer has been configured to take an additional command-line parameter to ignore division by zero errors. Let us use that to prevent the error from being raised. Run CalcServer as follows
 
 ``` bash
-python examples/calcserver.py --ignore-divbyzero
+python examples/calc_server.py --ignore-divbyzero
 ```
 
 Now retry the last division api call URL in the browser.
 
-examples/calcserver.py is a demonstration of how FuncServer can be used and what it offers. To understand more read the code in funcserver.py - It is very concise.
+examples/calc_server.py is a demonstration of how FuncServer can be used and what it offers. To understand more read the code in funcserver.py - It is very concise.
+
+### Calculation RPC Server
+
+You will find an example script in examples/ called calc_rpc_server.py. This is very similar to calc_server.py but uses the RPC mechanism provided by the framework. This RPC mechanism using msgpack as the serialization format and is meant to be used from Python clients primarily (It is possible to access from Javascript and other languages too however).
+
+``` bash
+python examples/calc_rpc_server.py
+```
+
+To use the server's functionality, run the provided example client script in examples/ directory.
+
+``` bash
+python examples/calc_rpc_client.py
+```
