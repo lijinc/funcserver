@@ -3,7 +3,10 @@ import sys
 import json
 import code
 import logging
+import msgpack
+import urllib2
 import cStringIO
+import urlparse
 import argparse
 
 import tornado.ioloop
@@ -167,7 +170,7 @@ class FuncServer(object):
             'template_path': resolve_path(self.TEMPLATE_PATH)
         }
 
-        self.app = tornado.web.Application(base_handlers + handlers, **settings)
+        self.app = tornado.web.Application(handlers + base_handlers, **settings)
         sys.funcserver = self.app.funcserver = self
 
         # all active websockets and their state
@@ -185,8 +188,8 @@ class FuncServer(object):
         stderr_hdlr.setFormatter(formatter)
         weblog_hdlr.setFormatter(formatter)
 
-        log.addHandler(stderr_hdlr) 
-        log.addHandler(weblog_hdlr) 
+        log.addHandler(stderr_hdlr)
+        log.addHandler(weblog_hdlr)
 
         log.setLevel(logging.WARNING)
 
@@ -233,6 +236,63 @@ class FuncServer(object):
     def start(self):
         self.app.listen(self.args.port)
         tornado.ioloop.IOLoop.instance().start()
+
+class RPCHandler(tornado.web.RequestHandler):
+    def initialize(self, server):
+        self.server = server
+        self.api = server.api
+
+    def post(self):
+        m = msgpack.unpackb(self.request.body)
+        r = getattr(self.api, m['fn'])(*m['args'], **m['kwargs'])
+        self.write(msgpack.packb(r))
+
+class RPCServer(FuncServer):
+    NAME = 'RPCServer'
+    DESC = 'Default RPC Server'
+
+    def __init__(self, *args, **kwargs):
+        super(RPCServer, self).__init__(*args, **kwargs)
+        self.api = self.prepare_api()
+
+    def prepare_api(self):
+        '''
+        Prepare the API object that is exposed as
+        functionality by the RPCServer
+        '''
+        return None
+
+    def prepare_base_handlers(self):
+        hdlrs = super(RPCServer, self).prepare_base_handlers()
+        hdlrs.append((r'/rpc', RPCHandler, dict(server=self)))
+        return hdlrs
+
+    def define_python_namespace(self):
+        ns = super(RPCServer, self).define_python_namespace()
+        ns['api'] = self.api
+        return ns
+
+class RPCClientFunc(object):
+    def __init__(self, client, fn):
+        self.client = client
+        self.fn = fn
+
+    def __call__(self, *args, **kwargs):
+        return self.client.call(self.fn, *args, **kwargs)
+
+class RPCClient(object):
+    def __init__(self, server_url):
+        self.server_url = server_url
+        self.rpc_url = urlparse.urljoin(server_url, 'rpc')
+
+    def __getattr__(self, attr):
+        return RPCClientFunc(self, attr)
+
+    def call(self, fn, *args, **kwargs):
+        m = msgpack.packb(dict(fn=fn, args=args, kwargs=kwargs))
+        req = urllib2.Request(self.rpc_url, m)
+        res = urllib2.urlopen(req).read()
+        return msgpack.unpackb(res)
 
 if __name__ == '__main__':
     funcserver = FuncServer()

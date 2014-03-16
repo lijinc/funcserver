@@ -11,6 +11,7 @@ setup(
     license='MIT License',
     install_requires=[
         'tornado',
+        'msgpack-python',
     ],
     package_dir={'funcserver': 'funcserver'},
     packages=find_packages('.'),
