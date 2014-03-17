@@ -16,7 +16,7 @@ sudo pip install git+git://github.com/prashanthellina/funcserver.git
 The following is the code to implement the most basic Functionality Server.
 
 ``` python
-from funserver import FuncServer
+from funcserver import FuncServer
 
 if __name__ == '__main__':
     FuncServer().start()
