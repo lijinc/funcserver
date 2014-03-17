@@ -17,6 +17,9 @@ import tornado.iostream
 MSG_TYPE_CONSOLE = 0
 MSG_TYPE_LOG = 1
 
+class RPCCallException(Exception):
+    pass
+
 class BaseHandler(tornado.web.RequestHandler):
     def get_template_namespace(self):
         ns = super(BaseHandler, self).get_template_namespace()
@@ -244,7 +247,13 @@ class RPCHandler(tornado.web.RequestHandler):
 
     def post(self):
         m = msgpack.unpackb(self.request.body)
-        r = getattr(self.api, m['fn'])(*m['args'], **m['kwargs'])
+
+        try:
+            r = getattr(self.api, m['fn'])(*m['args'], **m['kwargs'])
+            r = {'success': True, 'result': r}
+        except Exception, e:
+            r = {'success': False, 'result': repr(e)}
+
         self.write(msgpack.packb(r))
 
 class RPCServer(FuncServer):
@@ -292,7 +301,12 @@ class RPCClient(object):
         m = msgpack.packb(dict(fn=fn, args=args, kwargs=kwargs))
         req = urllib2.Request(self.rpc_url, m)
         res = urllib2.urlopen(req).read()
-        return msgpack.unpackb(res)
+        res = msgpack.unpackb(res)
+
+        if not res['success']:
+            raise RPCCallException(res['result'])
+        else:
+            return res['result']
 
 if __name__ == '__main__':
     funcserver = FuncServer()
