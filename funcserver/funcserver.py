@@ -240,7 +240,7 @@ class FuncServer(object):
         self.app.listen(self.args.port)
         tornado.ioloop.IOLoop.instance().start()
 
-class RPCHandler(tornado.web.RequestHandler):
+class RPCHandler(BaseHandler):
     def initialize(self, server):
         self.server = server
         self.api = server.api
