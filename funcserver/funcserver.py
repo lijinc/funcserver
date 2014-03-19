@@ -179,8 +179,6 @@ class FuncServer(object):
         # all active websockets and their state
         self.websocks = {}
 
-        self.pre_start()
-
     def init_logger(self):
         log = logging.getLogger('')
         formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
@@ -237,6 +235,7 @@ class FuncServer(object):
         pass
 
     def start(self):
+        self.pre_start()
         self.app.listen(self.args.port)
         tornado.ioloop.IOLoop.instance().start()
 
@@ -262,6 +261,9 @@ class RPCServer(FuncServer):
 
     def __init__(self, *args, **kwargs):
         super(RPCServer, self).__init__(*args, **kwargs)
+        self.api = None
+
+    def pre_start(self):
         self.api = self.prepare_api()
 
     def prepare_api(self):
