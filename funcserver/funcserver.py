@@ -29,10 +29,10 @@ class BaseHandler(tornado.web.RequestHandler):
 class PyInterpreter(code.InteractiveInterpreter):
     def __init__(self, *args, **kwargs):
         code.InteractiveInterpreter.__init__(self, *args, **kwargs)
-        self.output = ''
+        self.output = []
 
     def write(self, data):
-        self.output = data
+        self.output.append(data)
 
 class WSConnection(tornado.websocket.WebSocketHandler):
     '''
@@ -81,7 +81,8 @@ class WSConnection(tornado.websocket.WebSocketHandler):
             sys.stdout = cStringIO.StringIO()
             interpreter.runsource(code)
             output = sys.stdout.getvalue() or interpreter.output
-            interpreter.output = ''
+            if isinstance(output, list): output = ''.join(output)
+            interpreter.output = []
         finally:
             sys.stdout = stdout
 
@@ -119,6 +120,10 @@ class WSConnection(tornado.websocket.WebSocketHandler):
 
     def _msg_from(self, msg):
         return {'type': msg.get('type', ''), 'id': msg['id']}
+
+def call(fn):
+    ioloop = tornado.ioloop.IOLoop.instance()
+    ioloop.add_callback(fn)
 
 def make_handler(template, handler):
     class SimpleHandler(handler):
@@ -192,7 +197,7 @@ class FuncServer(object):
         log.addHandler(stderr_hdlr)
         log.addHandler(weblog_hdlr)
 
-        log.setLevel(logging.WARNING)
+        log.setLevel(logging.DEBUG)
 
         return log
 
@@ -226,7 +231,7 @@ class FuncServer(object):
         pass
 
     def define_python_namespace(self):
-        return {'server': self, 'logging': logging}
+        return {'server': self, 'logging': logging, 'call': call}
 
     def define_template_namespace(self):
         return self.define_python_namespace()
@@ -265,6 +270,7 @@ class RPCServer(FuncServer):
 
     def pre_start(self):
         self.api = self.prepare_api()
+        if not hasattr(self.api, 'log'): self.api.log = self.log
 
     def prepare_api(self):
         '''
