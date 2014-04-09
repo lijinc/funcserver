@@ -132,3 +132,7 @@ Instead do this:
 ```
 
 Now the pdb console will appear in the terminal where you started your server.
+
+### Projects using Funcserver
+
+* Rocks DB Server (https://github.com/prashanthellina/rocksdbserver)
