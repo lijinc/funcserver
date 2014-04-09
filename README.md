@@ -135,4 +135,5 @@ Now the pdb console will appear in the terminal where you started your server.
 
 ### Projects using Funcserver
 
-* Rocks DB Server (https://github.com/prashanthellina/rocksdbserver)
+* [Rocks DB Server](https://github.com/prashanthellina/rocksdbserver) -- Server exposing facebook's Rocks DB API via RPC
+* [Vowpal Wabbit Server](https://github.com/prashanthellina/vwserver) -- Server exposing Vowpal Wabbit ML utility API via RPC
