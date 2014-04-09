@@ -108,3 +108,27 @@ To use the server's functionality, run the provided example client script in exa
 ``` bash
 python examples/calc_rpc_client.py
 ```
+
+### Debugging using PDB
+
+When it is required to debug the API code using the Python debugger you may have to trigger the API function from the web based python console. However due to the design of FuncServer PDB does not work well in the scenario (as a result of the output being captured by the python interpretation part of FuncServer). To work around this issue a facility has been provided in the form of the "call" utility function available in the python console namespace. The usage is show below.
+
+Let us assume that you have pdb trace set in code as follows:
+``` python
+def some_api_fn(self, a, b):
+    import pdb; pdb.set_trace()
+    c = a + b
+    return c
+```
+
+If you call this api function as follows then debugging will not work and the api call will block from the console.
+``` python
+>>> api.some_api_fn(10, 20)
+```
+
+Instead do this:
+``` python
+>>> call(lambda: api.some_api_fn(10, 20))
+```
+
+Now the pdb console will appear in the terminal where you started your server.
