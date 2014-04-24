@@ -10,6 +10,7 @@ setup(
     url="https://github.com/prashanthellina/funcserver",
     license='MIT License',
     install_requires=[
+        'gevent',
         'tornado',
         'msgpack-python',
     ],

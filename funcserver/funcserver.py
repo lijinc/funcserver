@@ -1,3 +1,5 @@
+from gevent import monkey; monkey.patch_all()
+
 import os
 import sys
 import json
@@ -16,6 +18,8 @@ import tornado.iostream
 
 MSG_TYPE_CONSOLE = 0
 MSG_TYPE_LOG = 1
+
+MAX_LOG_FILE_SIZE = 100 * 1024 * 1024 # 100MB
 
 class RPCCallException(Exception):
     pass
@@ -160,14 +164,15 @@ class FuncServer(object):
     TEMPLATE_PATH = 'templates'
 
     def __init__(self):
-        self.log = self.init_logger()
-        self.log_id = 0
-
         # argparse parser obj
         self.parser = argparse.ArgumentParser(description=self.DESC)
         self.define_baseargs(self.parser)
         self.define_args(self.parser)
         self.args = self.parser.parse_args()
+
+        # prep logger
+        self.log = self.init_logger(self.args.log)
+        self.log_id = 0
 
         # tornado app object
         base_handlers = self.prepare_base_handlers()
@@ -184,18 +189,22 @@ class FuncServer(object):
         # all active websockets and their state
         self.websocks = {}
 
-    def init_logger(self):
+    def init_logger(self, fname):
         log = logging.getLogger('')
         formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
 
         stderr_hdlr = logging.StreamHandler(sys.stderr)
         weblog_hdlr = WebLogHandler(self)
+        rofile_hdlr = logging.handlers.RotatingFileHandler(fname,
+            maxBytes=MAX_LOG_FILE_SIZE, backupCount=10)
 
         stderr_hdlr.setFormatter(formatter)
         weblog_hdlr.setFormatter(formatter)
+        rofile_hdlr.setFormatter(formatter)
 
         log.addHandler(stderr_hdlr)
         log.addHandler(weblog_hdlr)
+        log.addHandler(rofile_hdlr)
 
         log.setLevel(logging.DEBUG)
 
@@ -226,6 +235,8 @@ class FuncServer(object):
     def define_baseargs(self, parser):
         parser.add_argument('--port', default=self.DEFAULT_PORT,
             type=int, help='port to listen on for server')
+        parser.add_argument('--log', default='log.%s' % sys.argv[0].split('.')[0],
+            help='Name of log file')
 
     def define_args(self, parser):
         pass
@@ -237,7 +248,7 @@ class FuncServer(object):
         return self.define_python_namespace()
 
     def pre_start(self):
-        pass
+        self.log.debug('pre_start: args=%s' % repr(self.args))
 
     def start(self):
         self.pre_start()
@@ -271,6 +282,7 @@ class RPCServer(FuncServer):
     def pre_start(self):
         self.api = self.prepare_api()
         if not hasattr(self.api, 'log'): self.api.log = self.log
+        super(RPCServer, self).pre_start()
 
     def prepare_api(self):
         '''
