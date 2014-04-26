@@ -1,5 +1,6 @@
 from gevent import monkey; monkey.patch_all()
 
+import gc
 import os
 import sys
 import json
@@ -10,6 +11,8 @@ import urllib2
 import cStringIO
 import urlparse
 import argparse
+import traceback
+import threading
 
 import tornado.ioloop
 import tornado.web
@@ -158,7 +161,7 @@ class WebLogHandler(logging.Handler):
 class FuncServer(object):
     NAME = 'FuncServer'
     DESC = 'Default Functionality Server'
-    DEFAULT_PORT = 8889
+    DEFAULT_PORT = 9345
 
     STATIC_PATH = 'static'
     TEMPLATE_PATH = 'templates'
@@ -218,6 +221,44 @@ class FuncServer(object):
 
         self.log_id += 1
 
+    def dump_stacks(self):
+        '''
+        Dumps the stack of all threads and greenlets. This function
+        is meant for debugging. Useful when a deadlock happens.
+
+        borrowed from: http://blog.ziade.org/2012/05/25/zmq-and-gevent-debugging-nightmares/
+        '''
+
+        dump = []
+
+        # threads
+        threads = dict([(th.ident, th.name)
+                            for th in threading.enumerate()])
+
+        for thread, frame in sys._current_frames().items():
+            if thread not in threads: continue
+            dump.append('Thread 0x%x (%s)\n' % (thread, threads[thread]))
+            dump.append(''.join(traceback.format_stack(frame)))
+            dump.append('\n')
+
+        # greenlets
+        try:
+            from greenlet import greenlet
+        except ImportError:
+            return ''.join(dump)
+
+        # if greenlet is present, let's dump each greenlet stack
+        for ob in gc.get_objects():
+            if not isinstance(ob, greenlet):
+                continue
+            if not ob:
+                continue   # not running anymore or not started
+            dump.append('Greenlet\n')
+            dump.append(''.join(traceback.format_stack(ob.gr_frame)))
+            dump.append('\n')
+
+        return ''.join(dump)
+
     def prepare_base_handlers(self):
         # Tornado URL handlers for core functionality
 
@@ -235,7 +276,7 @@ class FuncServer(object):
     def define_baseargs(self, parser):
         parser.add_argument('--port', default=self.DEFAULT_PORT,
             type=int, help='port to listen on for server')
-        parser.add_argument('--log', default='log.%s' % sys.argv[0].split('.')[0],
+        parser.add_argument('--log', default='%s.log' % sys.argv[0].split('.')[0],
             help='Name of log file')
 
     def define_args(self, parser):
