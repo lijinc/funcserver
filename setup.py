@@ -11,6 +11,7 @@ setup(
     license='MIT License',
     install_requires=[
         'gevent',
+        'requests',
         'tornado',
         'msgpack-python',
     ],

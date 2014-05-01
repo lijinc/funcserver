@@ -7,13 +7,13 @@ import json
 import code
 import logging
 import msgpack
-import urllib2
 import cStringIO
 import urlparse
 import argparse
 import traceback
 import threading
 
+import requests
 import tornado.ioloop
 import tornado.web
 import tornado.websocket
@@ -360,9 +360,8 @@ class RPCClient(object):
 
     def call(self, fn, *args, **kwargs):
         m = msgpack.packb(dict(fn=fn, args=args, kwargs=kwargs))
-        req = urllib2.Request(self.rpc_url, m)
-        res = urllib2.urlopen(req).read()
-        res = msgpack.unpackb(res)
+        req = requests.post(self.rpc_url, data=m)
+        res = msgpack.unpackb(req.content)
 
         if not res['success']:
             raise RPCCallException(res['result'])
