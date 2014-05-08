@@ -299,6 +299,7 @@ class FuncServer(object):
 class RPCHandler(BaseHandler):
     def initialize(self, server):
         self.server = server
+        self.log = server.log
         self.api = server.api
 
     def post(self):
@@ -308,10 +309,9 @@ class RPCHandler(BaseHandler):
             r = getattr(self.api, m['fn'])(*m['args'], **m['kwargs'])
             r = {'success': True, 'result': r}
         except Exception, e:
-            if hasattr(self, 'log'):
-                self.log.exception('Exception during RPC call. '
-                    'fn=%s, args=%s, kwargs=%s' % \
-                    (m['fn'], repr(m['args']), repr(m['kwargs'])))
+            self.log.exception('Exception during RPC call. '
+                'fn=%s, args=%s, kwargs=%s' % \
+                (m['fn'], repr(m['args']), repr(m['kwargs'])))
             r = {'success': False, 'result': repr(e)}
 
         self.write(msgpack.packb(r))
