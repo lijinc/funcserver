@@ -216,8 +216,13 @@ class FuncServer(object):
     def _send_log(self, msg):
         msg = {'type': MSG_TYPE_LOG, 'id': self.log_id, 'data': msg}
 
-        for ws in self.websocks.itervalues():
+        bad_ws = []
+
+        for _id, ws in self.websocks.iteritems():
+            if ws is None: bad_ws.append(_id); continue
             ws['sock'].send_message(msg)
+
+        for _id in bad_ws: del self.websocks[_id]
 
         self.log_id += 1
 
@@ -302,11 +307,18 @@ class RPCHandler(BaseHandler):
         self.log = server.log
         self.api = server.api
 
+    def _get_apifn(self, fn_name):
+        obj = self.api
+        for part in fn_name.split('.'):
+            obj = getattr(obj, part)
+        return obj
+
     def post(self):
         m = msgpack.unpackb(self.request.body)
 
         try:
-            r = getattr(self.api, m['fn'])(*m['args'], **m['kwargs'])
+            fn = self._get_apifn(m['fn'])
+            r = fn(*m['args'], **m['kwargs'])
             r = {'success': True, 'result': r}
         except Exception, e:
             self.log.exception('Exception during RPC call. '
