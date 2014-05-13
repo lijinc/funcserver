@@ -13,6 +13,7 @@ import argparse
 import traceback
 import threading
 
+import gevent
 import requests
 import tornado.ioloop
 import tornado.web
@@ -138,13 +139,6 @@ def make_handler(template, handler):
             return self.render(template)
 
     return SimpleHandler
-
-class ConsoleHandler(tornado.web.RequestHandler):
-    def __init__(self, *args, **kwargs):
-        super(ConsoleHandler, self).__init__(*args, **kwargs)
-
-    def get(self):
-        pass
 
 def resolve_path(path):
     return path if os.path.isabs(path) else os.path.join(os.path.dirname(__file__), path)
@@ -313,20 +307,26 @@ class RPCHandler(BaseHandler):
             obj = getattr(obj, part)
         return obj
 
+    @tornado.web.asynchronous
     def post(self):
-        m = msgpack.unpackb(self.request.body)
 
-        try:
-            fn = self._get_apifn(m['fn'])
-            r = fn(*m['args'], **m['kwargs'])
-            r = {'success': True, 'result': r}
-        except Exception, e:
-            self.log.exception('Exception during RPC call. '
-                'fn=%s, args=%s, kwargs=%s' % \
-                (m['fn'], repr(m['args']), repr(m['kwargs'])))
-            r = {'success': False, 'result': repr(e)}
+        def _fn():
+            m = msgpack.unpackb(self.request.body)
 
-        self.write(msgpack.packb(r))
+            try:
+                fn = self._get_apifn(m['fn'])
+                r = fn(*m['args'], **m['kwargs'])
+                r = {'success': True, 'result': r}
+            except Exception, e:
+                self.log.exception('Exception during RPC call. '
+                    'fn=%s, args=%s, kwargs=%s' % \
+                    (m['fn'], repr(m['args']), repr(m['kwargs'])))
+                r = {'success': False, 'result': repr(e)}
+
+            self.write(msgpack.packb(r))
+            self.finish()
+
+        gevent.spawn(_fn)
 
 class RPCServer(FuncServer):
     NAME = 'RPCServer'
