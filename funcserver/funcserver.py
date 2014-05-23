@@ -296,6 +296,9 @@ class FuncServer(object):
         tornado.ioloop.IOLoop.instance().start()
 
 class RPCHandler(BaseHandler):
+    SERIALIZER = staticmethod(msgpack.packb)
+    DESERIALIZER = staticmethod(msgpack.unpackb)
+
     def initialize(self, server):
         self.server = server
         self.log = server.log
@@ -311,7 +314,7 @@ class RPCHandler(BaseHandler):
     def post(self):
 
         def _fn():
-            m = msgpack.unpackb(self.request.body)
+            m = self.DESERIALIZER(self.request.body)
 
             try:
                 fn = self._get_apifn(m['fn'])
@@ -323,7 +326,7 @@ class RPCHandler(BaseHandler):
                     (m['fn'], repr(m['args']), repr(m['kwargs'])))
                 r = {'success': False, 'result': repr(e)}
 
-            self.write(msgpack.packb(r))
+            self.write(self.SERIALIZER(r))
             self.finish()
 
         gevent.spawn(_fn)
@@ -365,6 +368,9 @@ def _passthrough(name):
     return fn
 
 class RPCClientFunc(object):
+    SERIALIZER = staticmethod(msgpack.packb)
+    DESERIALIZER = staticmethod(msgpack.unpackb)
+
     def __init__(self, client, attrs):
         self.attrs = attrs
         self.client = client
@@ -380,9 +386,9 @@ class RPCClientFunc(object):
 
     def __call__(self, *args, **kwargs):
         fn = '.'.join(self.attrs)
-        m = msgpack.packb(dict(fn=fn, args=args, kwargs=kwargs))
+        m = self.SERIALIZER(dict(fn=fn, args=args, kwargs=kwargs))
         req = requests.post(self.client.rpc_url, data=m)
-        res = msgpack.unpackb(req.content)
+        res = self.DESERIALIZER(req.content)
 
         if not res['success']:
             raise RPCCallException(res['result'])
@@ -390,12 +396,14 @@ class RPCClientFunc(object):
             return res['result']
 
 class RPCClient(object):
+    CLIENTFUNC = RPCClientFunc
+
     def __init__(self, server_url):
         self.server_url = server_url
         self.rpc_url = urlparse.urljoin(server_url, 'rpc')
 
     def __getattr__(self, attr):
-        return RPCClientFunc(self, [attr])
+        return self.CLIENTFUNC(self, [attr])
 
 if __name__ == '__main__':
     funcserver = FuncServer()
