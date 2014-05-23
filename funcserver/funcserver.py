@@ -296,8 +296,6 @@ class FuncServer(object):
         tornado.ioloop.IOLoop.instance().start()
 
 class RPCHandler(BaseHandler):
-    SERIALIZER = staticmethod(msgpack.packb)
-    DESERIALIZER = staticmethod(msgpack.unpackb)
 
     def initialize(self, server):
         self.server = server
@@ -314,7 +312,7 @@ class RPCHandler(BaseHandler):
     def post(self):
 
         def _fn():
-            m = self.DESERIALIZER(self.request.body)
+            m = self.server.DESERIALIZER(self.request.body)
 
             try:
                 fn = self._get_apifn(m['fn'])
@@ -326,7 +324,7 @@ class RPCHandler(BaseHandler):
                     (m['fn'], repr(m['args']), repr(m['kwargs'])))
                 r = {'success': False, 'result': repr(e)}
 
-            self.write(self.SERIALIZER(r))
+            self.write(self.server.SERIALIZER(r))
             self.finish()
 
         gevent.spawn(_fn)
@@ -334,6 +332,9 @@ class RPCHandler(BaseHandler):
 class RPCServer(FuncServer):
     NAME = 'RPCServer'
     DESC = 'Default RPC Server'
+
+    SERIALIZER = staticmethod(msgpack.packb)
+    DESERIALIZER = staticmethod(msgpack.unpackb)
 
     def __init__(self, *args, **kwargs):
         super(RPCServer, self).__init__(*args, **kwargs)
