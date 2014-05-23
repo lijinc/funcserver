@@ -375,6 +375,18 @@ class RPCClientFunc(object):
         self.attrs.append('__setitem__')
         return self(key, value)
 
+    def __delitem__(self, key):
+        self.attrs.append('__delitem__')
+        return self(key)
+
+    def __contains__(self, key):
+        self.attrs.append('__contains__')
+        return self(key)
+
+    def __len__(self):
+        self.attrs.append('__len__')
+        return self(key)
+
     def __call__(self, *args, **kwargs):
         fn = '.'.join(self.attrs)
         m = msgpack.packb(dict(fn=fn, args=args, kwargs=kwargs))
