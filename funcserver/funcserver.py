@@ -363,7 +363,7 @@ class RPCServer(FuncServer):
 
 def _passthrough(name):
     def fn(self, *args, **kwargs):
-        _fn = RPCClientFunc(self.client, self.attrs + [name])
+        _fn = self.client.CLIENTFUNC(self.client, self.attrs + [name])
         return _fn(*args, **kwargs)
     return fn
 
@@ -376,7 +376,7 @@ class RPCClientFunc(object):
         self.client = client
 
     def __getattr__(self, attr):
-        return RPCClientFunc(self.client, self.attrs + [attr])
+        return self.client.CLIENTFUNC(self.client, self.attrs + [attr])
 
     __getitem__ = _passthrough('__getitem__')
     __setitem__ = _passthrough('__setitem__')
