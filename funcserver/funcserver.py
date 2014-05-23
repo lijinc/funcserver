@@ -359,13 +359,12 @@ class RPCServer(FuncServer):
         return ns
 
 class RPCClientFunc(object):
-    def __init__(self, client, attr):
-        self.attrs = [attr]
+    def __init__(self, client, attrs):
+        self.attrs = attrs
         self.client = client
 
     def __getattr__(self, attr):
-        self.attrs.append(attr)
-        return self
+        return RPCClientFunc(self.client, self.attrs + [attr])
 
     def __getitem__(self, key):
         self.attrs.append('__getitem__')
@@ -404,7 +403,7 @@ class RPCClient(object):
         self.rpc_url = urlparse.urljoin(server_url, 'rpc')
 
     def __getattr__(self, attr):
-        return RPCClientFunc(self, attr)
+        return RPCClientFunc(self, [attr])
 
 if __name__ == '__main__':
     funcserver = FuncServer()
