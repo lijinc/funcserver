@@ -359,12 +359,32 @@ class RPCServer(FuncServer):
         return ns
 
 class RPCClientFunc(object):
-    def __init__(self, client, fn):
+    def __init__(self, client, attr):
+        self.attrs = [attr]
         self.client = client
-        self.fn = fn
+
+    def __getattr__(self, attr):
+        self.attrs.append(attr)
+        return self
+
+    def __getitem__(self, key):
+        self.attrs.append('__getitem__')
+        return self(key)
+
+    def __setitem__(self, key, value):
+        self.attrs.append('__setitem__')
+        return self(key, value)
 
     def __call__(self, *args, **kwargs):
-        return self.client.call(self.fn, *args, **kwargs)
+        fn = '.'.join(self.attrs)
+        m = msgpack.packb(dict(fn=fn, args=args, kwargs=kwargs))
+        req = requests.post(self.client.rpc_url, data=m)
+        res = msgpack.unpackb(req.content)
+
+        if not res['success']:
+            raise RPCCallException(res['result'])
+        else:
+            return res['result']
 
 class RPCClient(object):
     def __init__(self, server_url):
@@ -373,16 +393,6 @@ class RPCClient(object):
 
     def __getattr__(self, attr):
         return RPCClientFunc(self, attr)
-
-    def call(self, fn, *args, **kwargs):
-        m = msgpack.packb(dict(fn=fn, args=args, kwargs=kwargs))
-        req = requests.post(self.rpc_url, data=m)
-        res = msgpack.unpackb(req.content)
-
-        if not res['success']:
-            raise RPCCallException(res['result'])
-        else:
-            return res['result']
 
 if __name__ == '__main__':
     funcserver = FuncServer()
