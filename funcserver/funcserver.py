@@ -366,25 +366,19 @@ class RPCClientFunc(object):
     def __getattr__(self, attr):
         return RPCClientFunc(self.client, self.attrs + [attr])
 
-    def __getitem__(self, key):
-        self.attrs.append('__getitem__')
-        return self(key)
+    @staticmethod
+    def passthrough(name):
+        def fn(self, *args, **kwargs):
+            _fn = RPCClientFunc(self.client, self.attrs + [name])
+            return _fn(*args, **kwargs)
+        return fn
 
-    def __setitem__(self, key, value):
-        self.attrs.append('__setitem__')
-        return self(key, value)
 
-    def __delitem__(self, key):
-        self.attrs.append('__delitem__')
-        return self(key)
-
-    def __contains__(self, key):
-        self.attrs.append('__contains__')
-        return self(key)
-
-    def __len__(self):
-        self.attrs.append('__len__')
-        return self(key)
+    __getitem__ = passthrough('__getitem__')
+    __setitem__ = passthrough('__setitem__')
+    __delitem__ = passthrough('__delitem__')
+    __contains__ = passthrough('__contains__')
+    __len__ = passthrough('__len__')
 
     def __call__(self, *args, **kwargs):
         fn = '.'.join(self.attrs)
