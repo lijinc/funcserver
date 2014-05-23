@@ -25,6 +25,10 @@ MSG_TYPE_LOG = 1
 
 MAX_LOG_FILE_SIZE = 100 * 1024 * 1024 # 100MB
 
+# set the logging level of requests module to warning
+# otherwise it swamps with too many logs
+logging.getLogger('requests').setLevel(logging.WARNING)
+
 class RPCCallException(Exception):
     pass
 
@@ -308,21 +312,34 @@ class RPCHandler(BaseHandler):
             obj = getattr(obj, part)
         return obj
 
+    def _handle_call(self, m):
+        try:
+            fn = self._get_apifn(m['fn'])
+            r = fn(*m['args'], **m['kwargs'])
+            r = {'success': True, 'result': r}
+        except Exception, e:
+            self.log.exception('Exception during RPC call. '
+                'fn=%s, args=%s, kwargs=%s' % \
+                (m['fn'], repr(m['args']), repr(m['kwargs'])))
+            r = {'success': False, 'result': repr(e)}
+
+        return r
+
     @tornado.web.asynchronous
     def post(self):
+        
+        m = self.server.DESERIALIZER(self.request.body)
+        fn = m['fn']
 
         def _fn():
-            m = self.server.DESERIALIZER(self.request.body)
-
-            try:
-                fn = self._get_apifn(m['fn'])
-                r = fn(*m['args'], **m['kwargs'])
-                r = {'success': True, 'result': r}
-            except Exception, e:
-                self.log.exception('Exception during RPC call. '
-                    'fn=%s, args=%s, kwargs=%s' % \
-                    (m['fn'], repr(m['args']), repr(m['kwargs'])))
-                r = {'success': False, 'result': repr(e)}
+            if fn != '__batch__':
+                r = self._handle_single_call(m)
+            else:
+                r = []
+                for call in m['calls']:
+                    _r = self._handle_call(call)
+                    _r = _r['result'] if _r['success'] else None
+                    r.append(_r)
 
             self.write(self.server.SERIALIZER(r))
             self.finish()
@@ -364,20 +381,17 @@ class RPCServer(FuncServer):
 
 def _passthrough(name):
     def fn(self, *args, **kwargs):
-        _fn = self.client.CLIENTFUNC(self.client, self.attrs + [name])
+        _fn = RPCClientFunc(self.client, self.attrs + [name])
         return _fn(*args, **kwargs)
     return fn
 
 class RPCClientFunc(object):
-    SERIALIZER = staticmethod(msgpack.packb)
-    DESERIALIZER = staticmethod(msgpack.unpackb)
-
     def __init__(self, client, attrs):
         self.attrs = attrs
         self.client = client
 
     def __getattr__(self, attr):
-        return self.client.CLIENTFUNC(self.client, self.attrs + [attr])
+        return RPCClientFunc(self.client, self.attrs + [attr])
 
     __getitem__ = _passthrough('__getitem__')
     __setitem__ = _passthrough('__setitem__')
@@ -387,8 +401,30 @@ class RPCClientFunc(object):
 
     def __call__(self, *args, **kwargs):
         fn = '.'.join(self.attrs)
+        return self.client._call(fn, args, kwargs)
+
+class RPCClient(object):
+    SERIALIZER = staticmethod(msgpack.packb)
+    DESERIALIZER = staticmethod(msgpack.unpackb)
+
+    def __init__(self, server_url):
+        self.server_url = server_url
+        self.rpc_url = urlparse.urljoin(server_url, 'rpc')
+        self.is_batch = False
+        self._calls = []
+
+    def __getattr__(self, attr):
+        return RPCClientFunc(self, [attr])
+
+    def set_batch(self):
+        self.is_batch = True
+
+    def unset_batch(self):
+        self.is_batch = False
+
+    def _do_single_call(self, fn, args, kwargs):
         m = self.SERIALIZER(dict(fn=fn, args=args, kwargs=kwargs))
-        req = requests.post(self.client.rpc_url, data=m)
+        req = requests.post(self.rpc_url, data=m)
         res = self.DESERIALIZER(req.content)
 
         if not res['success']:
@@ -396,15 +432,22 @@ class RPCClientFunc(object):
         else:
             return res['result']
 
-class RPCClient(object):
-    CLIENTFUNC = RPCClientFunc
+    def _call(self, fn, args, kwargs):
+        if not self.is_batch:
+            return self._do_single_call(fn, args, kwargs)
+        else:
+            self._calls.append(dict(fn=fn, args=args, kwargs=kwargs))
 
-    def __init__(self, server_url):
-        self.server_url = server_url
-        self.rpc_url = urlparse.urljoin(server_url, 'rpc')
+    def execute(self):
+        if not self._calls: return
 
-    def __getattr__(self, attr):
-        return self.CLIENTFUNC(self, [attr])
+        m = dict(fn='__batch__', calls=self._calls)
+        m = self.SERIALIZER(m)
+        req = requests.post(self.rpc_url, data=m)
+        res = self.DESERIALIZER(req.content)
+        self._calls = []
+
+        return res
 
 if __name__ == '__main__':
     funcserver = FuncServer()
