@@ -358,6 +358,12 @@ class RPCServer(FuncServer):
         ns['api'] = self.api
         return ns
 
+def _passthrough(name):
+    def fn(self, *args, **kwargs):
+        _fn = RPCClientFunc(self.client, self.attrs + [name])
+        return _fn(*args, **kwargs)
+    return fn
+
 class RPCClientFunc(object):
     def __init__(self, client, attrs):
         self.attrs = attrs
@@ -366,19 +372,11 @@ class RPCClientFunc(object):
     def __getattr__(self, attr):
         return RPCClientFunc(self.client, self.attrs + [attr])
 
-    @staticmethod
-    def passthrough(name):
-        def fn(self, *args, **kwargs):
-            _fn = RPCClientFunc(self.client, self.attrs + [name])
-            return _fn(*args, **kwargs)
-        return fn
-
-
-    __getitem__ = passthrough('__getitem__')
-    __setitem__ = passthrough('__setitem__')
-    __delitem__ = passthrough('__delitem__')
-    __contains__ = passthrough('__contains__')
-    __len__ = passthrough('__len__')
+    __getitem__ = _passthrough('__getitem__')
+    __setitem__ = _passthrough('__setitem__')
+    __delitem__ = _passthrough('__delitem__')
+    __contains__ = _passthrough('__contains__')
+    __len__ = _passthrough('__len__')
 
     def __call__(self, *args, **kwargs):
         fn = '.'.join(self.attrs)
