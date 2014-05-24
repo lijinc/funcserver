@@ -403,6 +403,10 @@ class RPCClientFunc(object):
         fn = '.'.join(self.attrs)
         return self.client._call(fn, args, kwargs)
 
+    def set_batch(self): return self.client.set_batch()
+    def unset_batch(self): return self.client.unset_batch()
+    def execute(self): return self.client.execute()
+
 class RPCClient(object):
     SERIALIZER = staticmethod(msgpack.packb)
     DESERIALIZER = staticmethod(msgpack.unpackb)
