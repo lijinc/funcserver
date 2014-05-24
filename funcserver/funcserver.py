@@ -333,7 +333,7 @@ class RPCHandler(BaseHandler):
 
         def _fn():
             if fn != '__batch__':
-                r = self._handle_single_call(m)
+                r = self._handle_call(m)
             else:
                 r = []
                 for call in m['calls']:
