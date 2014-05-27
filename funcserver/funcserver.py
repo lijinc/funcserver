@@ -421,6 +421,12 @@ class RPCClient(object):
     def __getattr__(self, attr):
         return RPCClientFunc(self, [attr])
 
+    __getitem__ = _passthrough('__getitem__')
+    __setitem__ = _passthrough('__setitem__')
+    __delitem__ = _passthrough('__delitem__')
+    __contains__ = _passthrough('__contains__')
+    __len__ = _passthrough('__len__')
+
     def set_batch(self):
         self.is_batch = True
 
