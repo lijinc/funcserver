@@ -381,45 +381,42 @@ class RPCServer(FuncServer):
 
 def _passthrough(name):
     def fn(self, *args, **kwargs):
-        _fn = RPCClientFunc(self.client, self.attrs + [name])
-        return _fn(*args, **kwargs)
+        return self._call(name, args, kwargs)
     return fn
-
-class RPCClientFunc(object):
-    def __init__(self, client, attrs):
-        self.attrs = attrs
-        self.client = client
-
-    def __getattr__(self, attr):
-        return RPCClientFunc(self.client, self.attrs + [attr])
-
-    __getitem__ = _passthrough('__getitem__')
-    __setitem__ = _passthrough('__setitem__')
-    __delitem__ = _passthrough('__delitem__')
-    __contains__ = _passthrough('__contains__')
-    __len__ = _passthrough('__len__')
-
-    def __call__(self, *args, **kwargs):
-        fn = '.'.join(self.attrs)
-        return self.client._call(fn, args, kwargs)
-
-    def set_batch(self): return self.client.set_batch()
-    def unset_batch(self): return self.client.unset_batch()
-    def execute(self): return self.client.execute()
 
 class RPCClient(object):
     SERIALIZER = staticmethod(msgpack.packb)
     DESERIALIZER = staticmethod(msgpack.unpackb)
 
-    def __init__(self, server_url, prefix=None):
+    def __init__(self, server_url, prefix=None, parent=None):
         self.server_url = server_url
         self.rpc_url = urlparse.urljoin(server_url, 'rpc')
         self.is_batch = False
         self.prefix = prefix
+        self.parent = parent
+        self.bound = False
         self._calls = []
 
     def __getattr__(self, attr):
-        return RPCClientFunc(self, [attr])
+        prefix = self.prefix + '.' + attr if self.prefix else attr
+        return self.__class__(self.server_url, prefix=prefix,
+                parent=self if self.bound else self.parent)
+
+    def get_handle(self):
+        self.bound = True
+        return self
+
+    def __call__(self, *args, **kwargs):
+        if self.bound or self.parent is None:
+            return self._call(self.prefix, args, kwargs)
+        else:
+            return self.parent._call(self.prefix, args, kwargs)
+
+    def _call(self, fn, args, kwargs):
+        if not self.is_batch:
+            return self._do_single_call(fn, args, kwargs)
+        else:
+            self._calls.append(dict(fn=fn, args=args, kwargs=kwargs))
 
     __getitem__ = _passthrough('__getitem__')
     __setitem__ = _passthrough('__setitem__')
@@ -442,19 +439,6 @@ class RPCClient(object):
             raise RPCCallException(res['result'])
         else:
             return res['result']
-
-    def _call(self, fn, args, kwargs):
-        if self.prefix: fn = self.prefix + '.' + fn
-
-        if not self.is_batch:
-            return self._do_single_call(fn, args, kwargs)
-        else:
-            self._calls.append(dict(fn=fn, args=args, kwargs=kwargs))
-
-    def get_prefixed(self, prefix):
-        c = self.__class__(self.server_url, prefix)
-        c.is_batch = self.is_batch
-        return c
 
     def execute(self):
         if not self._calls: return
