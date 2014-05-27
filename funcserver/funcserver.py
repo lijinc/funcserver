@@ -415,7 +415,7 @@ class RPCClient(object):
         self.server_url = server_url
         self.rpc_url = urlparse.urljoin(server_url, 'rpc')
         self.is_batch = False
-        sekf.prefix = prefix
+        self.prefix = prefix
         self._calls = []
 
     def __getattr__(self, attr):
@@ -444,6 +444,11 @@ class RPCClient(object):
             return self._do_single_call(fn, args, kwargs)
         else:
             self._calls.append(dict(fn=fn, args=args, kwargs=kwargs))
+
+    def get_prefixed(self, prefix):
+        c = self.__class__(self.server_url, prefix)
+        c.is_batch = self.is_batch
+        return c
 
     def execute(self):
         if not self._calls: return
