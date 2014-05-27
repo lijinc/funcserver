@@ -12,6 +12,7 @@ import urlparse
 import argparse
 import traceback
 import threading
+from ast import literal_eval
 
 import gevent
 import requests
@@ -312,7 +313,7 @@ class RPCHandler(BaseHandler):
             obj = getattr(obj, part)
         return obj
 
-    def _handle_call(self, m):
+    def _handle_single_call(self, m):
         try:
             fn = self._get_apifn(m['fn'])
             r = fn(*m['args'], **m['kwargs'])
@@ -325,26 +326,38 @@ class RPCHandler(BaseHandler):
 
         return r
 
+    def _handle_call(self, fn, m):
+        if fn != '__batch__':
+            r = self._handle_single_call(m)
+        else:
+            r = []
+            for call in m['calls']:
+                _r = self._handle_single_call(call)
+                _r = _r['result'] if _r['success'] else None
+                r.append(_r)
+
+        self.write(self.server.SERIALIZER(r))
+        self.finish()
+
     @tornado.web.asynchronous
     def post(self):
-
         m = self.server.DESERIALIZER(self.request.body)
         fn = m['fn']
+        gevent.spawn(lambda: self._handle_call(fn, m))
 
-        def _fn():
-            if fn != '__batch__':
-                r = self._handle_call(m)
-            else:
-                r = []
-                for call in m['calls']:
-                    _r = self._handle_call(call)
-                    _r = _r['result'] if _r['success'] else None
-                    r.append(_r)
+    def failsafe_json_decode(self, v):
+        try: v = json.loads(v)
+        except ValueError: pass
+        return v
 
-            self.write(self.server.SERIALIZER(r))
-            self.finish()
+    @tornado.web.asynchronous
+    def get(self):
+        D = self.failsafe_json_decode
+        args = dict([(k, D(v[0])) for k, v in self.request.arguments.iteritems()])
 
-        gevent.spawn(_fn)
+        fn = args.pop('fn')
+        m = dict(kwargs=args, fn=fn, args=[])
+        gevent.spawn(lambda: self._handle_call(fn, m))
 
 class RPCServer(FuncServer):
     NAME = 'RPCServer'
