@@ -381,7 +381,11 @@ class RPCServer(FuncServer):
 
 def _passthrough(name):
     def fn(self, *args, **kwargs):
-        return self._call(name, args, kwargs)
+        p = self.prefix + '.' + name
+        if self.bound or self.parent is None:
+            return self._call(p, args, kwargs)
+        else:
+            return self.parent._call(p, args, kwargs)
     return fn
 
 class RPCClient(object):
