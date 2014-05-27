@@ -327,7 +327,7 @@ class RPCHandler(BaseHandler):
 
     @tornado.web.asynchronous
     def post(self):
-        
+
         m = self.server.DESERIALIZER(self.request.body)
         fn = m['fn']
 
@@ -411,10 +411,11 @@ class RPCClient(object):
     SERIALIZER = staticmethod(msgpack.packb)
     DESERIALIZER = staticmethod(msgpack.unpackb)
 
-    def __init__(self, server_url):
+    def __init__(self, server_url, prefix=None):
         self.server_url = server_url
         self.rpc_url = urlparse.urljoin(server_url, 'rpc')
         self.is_batch = False
+        sekf.prefix = prefix
         self._calls = []
 
     def __getattr__(self, attr):
@@ -437,6 +438,8 @@ class RPCClient(object):
             return res['result']
 
     def _call(self, fn, args, kwargs):
+        if self.prefix: fn = self.prefix + '.' + fn
+
         if not self.is_batch:
             return self._do_single_call(fn, args, kwargs)
         else:
