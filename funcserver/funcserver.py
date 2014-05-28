@@ -383,6 +383,7 @@ class RPCHandler(BaseHandler):
                 _r = _r['result'] if _r['success'] else None
                 r.append(_r)
 
+        self.set_header('Content-Type', self.get_mime(protocol))
         self.write(self.get_serializer(protocol)(r))
         self.finish()
     
@@ -395,6 +396,12 @@ class RPCHandler(BaseHandler):
         return {'msgpack': msgpack.packb,
                 'json': json.loads,
                 'python': eval}.get(name, self.server.DESERIALIZER)
+
+    def get_mime(self, name):
+        return {'msgpack': 'application/x-msgpack',
+                'json': 'application/json',
+                'python': 'application/x-python'}\
+                .get(name, self.server.MIME)
 
     @tornado.web.asynchronous
     def post(self, protocol='default'):
@@ -422,6 +429,7 @@ class RPCServer(FuncServer):
 
     SERIALIZER = staticmethod(msgpack.packb)
     DESERIALIZER = staticmethod(msgpack.unpackb)
+    MIME = 'application/x-msgpack'
 
     def __init__(self, *args, **kwargs):
         super(RPCServer, self).__init__(*args, **kwargs)
