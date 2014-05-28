@@ -20,6 +20,7 @@ import tornado.ioloop
 import tornado.web
 import tornado.websocket
 import tornado.iostream
+from tornado.template import BaseLoader, Template
 
 MSG_TYPE_CONSOLE = 0
 MSG_TYPE_LOG = 1
@@ -134,9 +135,11 @@ class WSConnection(tornado.websocket.WebSocketHandler):
     def _msg_from(self, msg):
         return {'type': msg.get('type', ''), 'id': msg['id']}
 
+
 def call(fn):
     ioloop = tornado.ioloop.IOLoop.instance()
     ioloop.add_callback(fn)
+
 
 def make_handler(template, handler):
     class SimpleHandler(handler):
@@ -145,8 +148,10 @@ def make_handler(template, handler):
 
     return SimpleHandler
 
+
 def resolve_path(path):
     return path if os.path.isabs(path) else os.path.join(os.path.dirname(__file__), path)
+
 
 class WebLogHandler(logging.Handler):
     def __init__(self, funcserver):
@@ -156,6 +161,33 @@ class WebLogHandler(logging.Handler):
     def emit(self, record):
         msg = self.format(record)
         self.funcserver._send_log(msg)
+
+
+class TemplateLoader(BaseLoader):
+    def __init__(self, dirs=None, **kwargs):
+        super(TemplateLoader, self).__init__(**kwargs)
+        self.dirs = dirs or []
+
+    def add_dir(self, d):
+        self.dirs.append(d)
+
+    def del_dir(self, d):
+        self.dirs.remove(d)
+
+    def resolve_path(self, name, parent_path=None):
+        for d in reversed(self.dirs):
+            p = os.path.join(d, name)
+            if not os.path.exists(p): continue
+            return os.path.abspath(p)
+
+        return name
+
+    def _create_template(self, name):
+        f = open(name, 'rb')
+        template = Template(f.read(), name=name, loader=self)
+        f.close()
+        return template
+
 
 class FuncServer(object):
     NAME = 'FuncServer'
@@ -179,10 +211,12 @@ class FuncServer(object):
         # tornado app object
         base_handlers = self.prepare_base_handlers()
         handlers = self.prepare_handlers()
+        self.template_loader = TemplateLoader([resolve_path(self.TEMPLATE_PATH)])
+        self.template_loader = self.prepare_template_loader(self.template_loader)
 
         settings = {
             'static_path': resolve_path(self.STATIC_PATH),
-            'template_path': resolve_path(self.TEMPLATE_PATH)
+            'template_loader': self.template_loader,
         }
 
         self.app = tornado.web.Application(handlers + base_handlers, **settings)
@@ -285,6 +319,11 @@ class FuncServer(object):
 
     def define_args(self, parser):
         pass
+
+    def prepare_template_loader(self, loader):
+        # add additional template dirs by using
+        # loader.add_dir(path)
+        return loader
 
     def define_python_namespace(self):
         return {'server': self, 'logging': logging, 'call': call}
