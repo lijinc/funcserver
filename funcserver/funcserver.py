@@ -21,6 +21,7 @@ import tornado.web
 import tornado.websocket
 import tornado.iostream
 from tornado.template import BaseLoader, Template
+from tornado.web import StaticFileHandler, HTTPError
 
 MSG_TYPE_CONSOLE = 0
 MSG_TYPE_LOG = 1
@@ -189,6 +190,36 @@ class TemplateLoader(BaseLoader):
         return template
 
 
+class CustomStaticFileHandler(StaticFileHandler):
+    PATHS = []
+    
+    @classmethod
+    def get_absolute_path(cls, root, path):
+        for p in reversed(cls.PATHS):
+            ap = os.path.join(p, path)
+            if not os.path.exists(ap):
+                continue
+            return ap
+
+        return path
+
+    def validate_absolute_path(self, root, absolute_path):
+        if (os.path.isdir(absolute_path) and
+                self.default_filename is not None):
+            # need to look at the request.path here for when path is empty
+            # but there is some prefix to the path that was already
+            # trimmed by the routing
+            if not self.request.path.endswith("/"):
+                self.redirect(self.request.path + "/", permanent=True)
+                return
+            absolute_path = os.path.join(absolute_path, self.default_filename)
+        if not os.path.exists(absolute_path):
+            raise HTTPError(404)
+        if not os.path.isfile(absolute_path):
+            raise HTTPError(403, "%s is not a file", self.path)
+        return absolute_path
+
+
 class FuncServer(object):
     NAME = 'FuncServer'
     DESC = 'Default Functionality Server'
@@ -214,11 +245,17 @@ class FuncServer(object):
         self.template_loader = TemplateLoader([resolve_path(self.TEMPLATE_PATH)])
         self.template_loader = self.prepare_template_loader(self.template_loader)
 
+        shclass = CustomStaticFileHandler
+        shclass.PATHS.append(resolve_path(self.STATIC_PATH))
+        shclass.PATHS = self.prepare_static_paths(shclass.PATHS)
+        self.static_handler_class = shclass
+
         self.nav_tabs = [('Console', '/console'), ('Logs', '/logs')]
         self.nav_tabs = self.prepare_nav_tabs(self.nav_tabs)
 
         settings = {
-            'static_path': resolve_path(self.STATIC_PATH),
+            'static_path': '<DUMMY-INEXISTENT-PATH>',
+            'static_handler_class': self.static_handler_class,
             'template_loader': self.template_loader,
         }
 
@@ -327,6 +364,12 @@ class FuncServer(object):
         # add additional template dirs by using
         # loader.add_dir(path)
         return loader
+
+    def prepare_static_paths(self, paths):
+        # add static paths that can contain
+        # additional of override files
+        # eg: paths.append(PATH)
+        return paths
 
     def prepare_nav_tabs(self, nav_tabs):
         # Add additional tab buttons in the UI toolbar
