@@ -373,7 +373,7 @@ class RPCHandler(BaseHandler):
 
         return r
 
-    def _handle_call(self, fn, m):
+    def _handle_call(self, fn, m, protocol):
         if fn != '__batch__':
             r = self._handle_single_call(m)
         else:
@@ -383,14 +383,24 @@ class RPCHandler(BaseHandler):
                 _r = _r['result'] if _r['success'] else None
                 r.append(_r)
 
-        self.write(self.server.SERIALIZER(r))
+        self.write(self.get_serializer(protocol)(r))
         self.finish()
+    
+    def get_serializer(self, name):
+        return {'msgpack': msgpack.packb,
+                'json': json.dumps,
+                'python': repr}.get(name, self.server.SERIALIZER)
+
+    def get_deserializer(self, name):
+        return {'msgpack': msgpack.packb,
+                'json': json.loads,
+                'python': eval}.get(name, self.server.DESERIALIZER)
 
     @tornado.web.asynchronous
-    def post(self):
-        m = self.server.DESERIALIZER(self.request.body)
+    def post(self, protocol='default'):
+        m = self.get_deserializer(protocol)(self.request.body)
         fn = m['fn']
-        gevent.spawn(lambda: self._handle_call(fn, m))
+        gevent.spawn(lambda: self._handle_call(fn, m, protocol))
 
     def failsafe_json_decode(self, v):
         try: v = json.loads(v)
@@ -398,13 +408,13 @@ class RPCHandler(BaseHandler):
         return v
 
     @tornado.web.asynchronous
-    def get(self):
+    def get(self, protocol='default'):
         D = self.failsafe_json_decode
         args = dict([(k, D(v[0])) for k, v in self.request.arguments.iteritems()])
 
         fn = args.pop('fn')
         m = dict(kwargs=args, fn=fn, args=[])
-        gevent.spawn(lambda: self._handle_call(fn, m))
+        gevent.spawn(lambda: self._handle_call(fn, m, protocol))
 
 class RPCServer(FuncServer):
     NAME = 'RPCServer'
@@ -431,7 +441,7 @@ class RPCServer(FuncServer):
 
     def prepare_base_handlers(self):
         hdlrs = super(RPCServer, self).prepare_base_handlers()
-        hdlrs.append((r'/rpc', RPCHandler, dict(server=self)))
+        hdlrs.append((r'/rpc(?:/([^/]*)/?)?', RPCHandler, dict(server=self)))
         return hdlrs
 
     def define_python_namespace(self):
