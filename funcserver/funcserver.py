@@ -214,6 +214,9 @@ class FuncServer(object):
         self.template_loader = TemplateLoader([resolve_path(self.TEMPLATE_PATH)])
         self.template_loader = self.prepare_template_loader(self.template_loader)
 
+        self.nav_tabs = [('Console', '/console'), ('Logs', '/logs')]
+        self.nav_tabs = self.prepare_nav_tabs(self.nav_tabs)
+
         settings = {
             'static_path': resolve_path(self.STATIC_PATH),
             'template_loader': self.template_loader,
@@ -324,6 +327,11 @@ class FuncServer(object):
         # add additional template dirs by using
         # loader.add_dir(path)
         return loader
+
+    def prepare_nav_tabs(self, nav_tabs):
+        # Add additional tab buttons in the UI toolbar
+        # eg: nav_tabs.append(('MyTab', '/mytab'))
+        return nav_tabs
 
     def define_python_namespace(self):
         return {'server': self, 'logging': logging, 'call': call}

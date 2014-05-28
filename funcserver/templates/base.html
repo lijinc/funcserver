@@ -41,8 +41,9 @@
 
                 <div class="collapse navbar-collapse navbar-ex1-collapse">
                     <ul class="nav navbar-nav">
-                        <li><a href="/console">Console</a></li>
-                        <li><a href="/logs">Logs</a></li>
+                        {% for navtab_title, navtab_path in server.nav_tabs %}
+                        <li><a href="{{ navtab_path }}">{{ navtab_path }}</a></li>
+                        {% end %}
                     </ul>
                 </div><!--/.nav-collapse -->
 
