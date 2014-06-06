@@ -391,6 +391,7 @@ class FuncServer(object):
         tornado.ioloop.IOLoop.instance().start()
 
 class RPCHandler(BaseHandler):
+    WRITE_CHUNK_SIZE = 4096
 
     def initialize(self, server):
         self.server = server
@@ -426,10 +427,16 @@ class RPCHandler(BaseHandler):
                 _r = _r['result'] if _r['success'] else None
                 r.append(_r)
 
+        r = self.get_serializer(protocol)(r)
         self.set_header('Content-Type', self.get_mime(protocol))
-        self.write(self.get_serializer(protocol)(r))
+        self.set_header('Content-Length', len(r))
+
+        chunk_size = self.WRITE_CHUNK_SIZE
+        for i in xrange(0, len(r), chunk_size):
+            self.write(r[i:i+chunk_size])
+            self.flush()
         self.finish()
-    
+
     def get_serializer(self, name):
         return {'msgpack': msgpack.packb,
                 'json': json.dumps,
@@ -548,6 +555,8 @@ class RPCClient(object):
     __delitem__ = _passthrough('__delitem__')
     __contains__ = _passthrough('__contains__')
     __len__ = _passthrough('__len__')
+
+    def __nonzero__(self): return True
 
     def set_batch(self):
         self.is_batch = True
