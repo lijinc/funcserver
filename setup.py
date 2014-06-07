@@ -12,6 +12,7 @@ setup(
     install_requires=[
         'gevent',
         'requests',
+        'statsd',
         'tornado',
         'msgpack-python',
     ],

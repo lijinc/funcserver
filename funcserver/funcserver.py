@@ -16,6 +16,7 @@ from ast import literal_eval
 
 import gevent
 import requests
+import statsd
 import tornado.ioloop
 import tornado.web
 import tornado.websocket
@@ -219,7 +220,6 @@ class CustomStaticFileHandler(StaticFileHandler):
             raise HTTPError(403, "%s is not a file", self.path)
         return absolute_path
 
-
 class FuncServer(object):
     NAME = 'FuncServer'
     DESC = 'Default Functionality Server'
@@ -227,6 +227,8 @@ class FuncServer(object):
 
     STATIC_PATH = 'static'
     TEMPLATE_PATH = 'templates'
+
+    STATS_FLUSH_INTERVAL = 1
 
     def __init__(self):
         # argparse parser obj
@@ -239,6 +241,8 @@ class FuncServer(object):
         # prep logger
         self.log = self.init_logger(self.args.log)
         self.log_id = 0
+
+        self.prep_stats_collection()
 
         # tornado app object
         base_handlers = self.prepare_base_handlers()
@@ -267,6 +271,10 @@ class FuncServer(object):
         self.websocks = {}
 
     def init_logger(self, fname):
+        if not fname:
+            n = '.'.join([x for x in (self.NAME, self.name) if x])
+            fname = '%s.log' % n
+
         log = logging.getLogger('')
         formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
 
@@ -299,6 +307,35 @@ class FuncServer(object):
         for _id in bad_ws: del self.websocks[_id]
 
         self.log_id += 1
+
+    def construct_stats_prefix(self):
+        return '.'.join([x for x in (socket.gethostname(), self.NAME, self.name) if x])
+
+    def prep_stats_collection(self):
+        class DummyStats(object):
+            def __getattr__(self, attr): return self
+            def __call__(self, *args, **kwargs): return self
+
+        self.stats = self._stats = DummyStats()
+
+        server = self.args.statsd_server
+        if not server: return
+
+        if ':' in server:
+            ip, port = server.split(':')
+            port = int(port)
+        else:
+            ip = server
+
+        S = stats.StatsClient
+        prefix = self.construct_stats_prefix()
+        self._stats = S(ip, port, prefix) if port is not None else S(ip, prefix=prefix)
+        self.stats = self._stats.pipeline()
+
+        def fn():
+            while 1: time.sleep(self.STATS_FLUSH_INTERVAL); self.stats.send()
+
+        self.stats_thread = gevent.spawn(lambda: fn)
 
     def dump_stacks(self):
         '''
@@ -355,9 +392,12 @@ class FuncServer(object):
     def define_baseargs(self, parser):
         parser.add_argument('--name', default=None,
             help='Name to identify this instance')
+        parser.add_argument('--statsd-server', default=None,
+            help='Location of StatsD server to send statistics. '
+                'Format is ip[:port]. Eg: localhost, localhost:8125')
         parser.add_argument('--port', default=self.DEFAULT_PORT,
             type=int, help='port to listen on for server')
-        parser.add_argument('--log', default='%s.log' % sys.argv[0].split('.')[0],
+        parser.add_argument('--log', default=None,
             help='Name of log file')
 
     def define_args(self, parser):
@@ -408,8 +448,12 @@ class RPCHandler(BaseHandler):
         return obj
 
     def _handle_single_call(self, m):
+        fn_name = m.get('fn', None)
+        t = self.stats.timer(fn_name).start() if fn_name else None
+
         try:
-            fn = self._get_apifn(m['fn'])
+            fn = self._get_apifn(fn_name)
+            self.stats.incr(fn_name)
             r = fn(*m['args'], **m['kwargs'])
             r = {'success': True, 'result': r}
         except Exception, e:
@@ -417,6 +461,8 @@ class RPCHandler(BaseHandler):
                 'fn=%s, args=%s, kwargs=%s' % \
                 (m['fn'], repr(m['args']), repr(m['kwargs'])))
             r = {'success': False, 'result': repr(e)}
+        finally:
+            if t is not None: t.stop()
 
         return r
 
