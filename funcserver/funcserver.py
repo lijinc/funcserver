@@ -234,6 +234,7 @@ class FuncServer(object):
         self.define_baseargs(self.parser)
         self.define_args(self.parser)
         self.args = self.parser.parse_args()
+        self.name = self.args.name
 
         # prep logger
         self.log = self.init_logger(self.args.log)
@@ -352,6 +353,8 @@ class FuncServer(object):
         return []
 
     def define_baseargs(self, parser):
+        parser.add_argument('--name', default=None,
+            help='Name to identify this instance')
         parser.add_argument('--port', default=self.DEFAULT_PORT,
             type=int, help='port to listen on for server')
         parser.add_argument('--log', default='%s.log' % sys.argv[0].split('.')[0],
