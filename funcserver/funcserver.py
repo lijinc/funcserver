@@ -4,7 +4,9 @@ import gc
 import os
 import sys
 import json
+import time
 import code
+import socket
 import logging
 import msgpack
 import cStringIO
@@ -321,13 +323,14 @@ class FuncServer(object):
         server = self.args.statsd_server
         if not server: return
 
+        port = None
         if ':' in server:
             ip, port = server.split(':')
             port = int(port)
         else:
             ip = server
 
-        S = stats.StatsClient
+        S = statsd.StatsClient
         prefix = self.construct_stats_prefix()
         self._stats = S(ip, port, prefix) if port is not None else S(ip, prefix=prefix)
         self.stats = self._stats.pipeline()
@@ -335,7 +338,7 @@ class FuncServer(object):
         def fn():
             while 1: time.sleep(self.STATS_FLUSH_INTERVAL); self.stats.send()
 
-        self.stats_thread = gevent.spawn(lambda: fn)
+        self.stats_thread = gevent.spawn(fn)
 
     def dump_stacks(self):
         '''
@@ -438,6 +441,7 @@ class RPCHandler(BaseHandler):
 
     def initialize(self, server):
         self.server = server
+        self.stats = server.stats
         self.log = server.log
         self.api = server.api
 
@@ -449,11 +453,12 @@ class RPCHandler(BaseHandler):
 
     def _handle_single_call(self, m):
         fn_name = m.get('fn', None)
-        t = self.stats.timer(fn_name).start() if fn_name else None
+        sname = 'api.%s' % fn_name
+        t = self.stats.timer(sname).start() if fn_name else None
 
         try:
             fn = self._get_apifn(fn_name)
-            self.stats.incr(fn_name)
+            self.stats.incr(sname)
             r = fn(*m['args'], **m['kwargs'])
             r = {'success': True, 'result': r}
         except Exception, e:
