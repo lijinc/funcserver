@@ -241,7 +241,7 @@ class FuncServer(object):
         self.name = self.args.name
 
         # prep logger
-        self.log = self.init_logger(self.args.log)
+        self.log = self.init_logger(self.args.log, self.args.log_level)
         self.log_id = 0
 
         self.prep_stats_collection()
@@ -272,7 +272,7 @@ class FuncServer(object):
         # all active websockets and their state
         self.websocks = {}
 
-    def init_logger(self, fname):
+    def init_logger(self, fname, log_level):
         if not fname:
             n = '.'.join([x for x in (self.NAME, self.name) if x])
             fname = '%s.log' % n
@@ -293,7 +293,7 @@ class FuncServer(object):
         log.addHandler(weblog_hdlr)
         log.addHandler(rofile_hdlr)
 
-        log.setLevel(logging.DEBUG)
+        log.setLevel(getattr(logging, log_level.upper()))
 
         return log
 
@@ -402,6 +402,8 @@ class FuncServer(object):
             type=int, help='port to listen on for server')
         parser.add_argument('--log', default=None,
             help='Name of log file')
+        parser.add_argument('--log-level', default='WARNING',
+            help='Logging level as picked from the logging module')
 
     def define_args(self, parser):
         pass
