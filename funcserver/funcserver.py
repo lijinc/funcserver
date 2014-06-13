@@ -239,6 +239,7 @@ class FuncServer(object):
         self.define_args(self.parser)
         self.args = self.parser.parse_args()
         self.name = self.args.name
+        self.hostname = socket.gethostname()
 
         # prep logger
         self.log = self.init_logger(self.args.log, self.args.log_level)
@@ -311,7 +312,7 @@ class FuncServer(object):
         self.log_id += 1
 
     def construct_stats_prefix(self):
-        return '.'.join([x for x in (socket.gethostname(), self.NAME, self.name) if x])
+        return '.'.join([x for x in (self.hostname, self.NAME, self.name) if x])
 
     def prep_stats_collection(self):
         class DummyStats(object):
