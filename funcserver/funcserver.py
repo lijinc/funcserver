@@ -253,11 +253,14 @@ class FuncServer(object):
         base_handlers = self.prepare_base_handlers()
         handlers = self.prepare_handlers()
         self.template_loader = TemplateLoader([resolve_path(self.TEMPLATE_PATH)])
-        self.template_loader = self.prepare_template_loader(self.template_loader)
+        _ = self.prepare_template_loader(self.template_loader)
+        if _ is not None: self.template_loader = _
 
         shclass = CustomStaticFileHandler
         shclass.PATHS.append(resolve_path(self.STATIC_PATH))
-        shclass.PATHS = self.prepare_static_paths(shclass.PATHS)
+        _ = self.prepare_static_paths(shclass.PATHS)
+        if _ is not None: shclass.PATHS = _
+
         self.static_handler_class = shclass
 
         self.nav_tabs = [('Console', '/console'), ('Logs', '/logs')]
