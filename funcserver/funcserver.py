@@ -233,6 +233,8 @@ class FuncServer(object):
 
     STATS_FLUSH_INTERVAL = 1
 
+    APP_CLASS = tornado.web.Application
+
     def __init__(self):
         # argparse parser obj
         self.parser = argparse.ArgumentParser(description=self.DESC)
@@ -272,8 +274,9 @@ class FuncServer(object):
             'template_loader': self.template_loader,
         }
 
-        self.app = tornado.web.Application(**settings)
-        self.app.add_handlers(self.VIRTUAL_HOST, handlers + base_handlers)
+        all_handlers = handlers + base_handlers
+        self.app = self.APP_CLASS(**settings)
+        self.app.add_handlers(self.VIRTUAL_HOST, all_handlers)
 
         sys.funcserver = self.app.funcserver = self
 
