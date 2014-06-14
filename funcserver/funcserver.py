@@ -242,7 +242,8 @@ class FuncServer(object):
         self.hostname = socket.gethostname()
 
         # prep logger
-        self.log = self.init_logger(self.args.log, self.args.log_level)
+        self.log = self.init_logger(self.args.log, self.args.log_level,\
+            quiet=self.args.quiet)
         self.log_id = 0
 
         self.prep_stats_collection()
@@ -273,7 +274,7 @@ class FuncServer(object):
         # all active websockets and their state
         self.websocks = {}
 
-    def init_logger(self, fname, log_level):
+    def init_logger(self, fname, log_level, quiet=False):
         if not fname:
             n = '.'.join([x for x in (self.NAME, self.name) if x])
             fname = '%s.log' % n
@@ -286,13 +287,13 @@ class FuncServer(object):
         rofile_hdlr = logging.handlers.RotatingFileHandler(fname,
             maxBytes=MAX_LOG_FILE_SIZE, backupCount=10)
 
-        stderr_hdlr.setFormatter(formatter)
         weblog_hdlr.setFormatter(formatter)
         rofile_hdlr.setFormatter(formatter)
+        stderr_hdlr.setFormatter(formatter)
 
-        log.addHandler(stderr_hdlr)
         log.addHandler(weblog_hdlr)
         log.addHandler(rofile_hdlr)
+        if not quiet: log.addHandler(stderr_hdlr)
 
         log.setLevel(getattr(logging, log_level.upper()))
 
@@ -405,6 +406,7 @@ class FuncServer(object):
             help='Name of log file')
         parser.add_argument('--log-level', default='WARNING',
             help='Logging level as picked from the logging module')
+        parser.add_argument('--quiet', action='store_true')
 
     def define_args(self, parser):
         pass
