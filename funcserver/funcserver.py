@@ -195,7 +195,7 @@ class TemplateLoader(BaseLoader):
 
 class CustomStaticFileHandler(StaticFileHandler):
     PATHS = []
-    
+
     @classmethod
     def get_absolute_path(cls, root, path):
         for p in reversed(cls.PATHS):
@@ -226,6 +226,7 @@ class FuncServer(object):
     NAME = 'FuncServer'
     DESC = 'Default Functionality Server'
     DEFAULT_PORT = 9345
+    VIRTUAL_HOST = r'.*'
 
     STATIC_PATH = 'static'
     TEMPLATE_PATH = 'templates'
@@ -268,7 +269,9 @@ class FuncServer(object):
             'template_loader': self.template_loader,
         }
 
-        self.app = tornado.web.Application(handlers + base_handlers, **settings)
+        self.app = tornado.web.Application(**settings)
+        self.app.add_handlers(self.VIRTUAL_HOST, handlers + base_handlers)
+
         sys.funcserver = self.app.funcserver = self
 
         # all active websockets and their state
