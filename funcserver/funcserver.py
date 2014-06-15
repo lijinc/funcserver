@@ -236,7 +236,7 @@ class StatsCollector(object):
             ip, port = stats_loc.split(':')
             port = int(port)
         else:
-            ip = server
+            ip = stats_loc
 
         S = statsd.StatsClient
         self.stats = S(ip, port, prefix) if port is not None else S(ip, prefix=prefix)
