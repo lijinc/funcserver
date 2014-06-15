@@ -222,6 +222,46 @@ class CustomStaticFileHandler(StaticFileHandler):
             raise HTTPError(403, "%s is not a file", self.path)
         return absolute_path
 
+class StatsCollector(object):
+    STATS_FLUSH_INTERVAL = 1
+
+    def __init__(self, prefix, stats_loc):
+        self.cache = {}
+
+        self.stats = None
+        if not stats_loc: return
+
+        port = None
+        if ':' in stats_loc:
+            ip, port = stats_loc.split(':')
+            port = int(port)
+        else:
+            ip = server
+
+        S = statsd.StatsClient
+        self.stats = S(ip, port, prefix) if port is not None else S(ip, prefix=prefix)
+
+        def fn():
+            while 1: time.sleep(self.STATS_FLUSH_INTERVAL); self.send()
+
+        self.stats_thread = gevent.spawn(fn)
+
+    def incr(self, key, n=1):
+        self.cache[key] = self.cache.get(key, 0) + n
+
+    def decr(self, key, n=1):
+        self.cache[key] = self.cache.get(key, 0) - n
+
+    def timing(self, key, ms):
+        return self.stats.timing(key, ms)
+
+    def send(self):
+        p = self.stats.pipeline()
+        for k, v in self.cache.iteritems():
+            p.incr(k, v)
+        p.send()
+        self.cache = {}
+
 class FuncServer(object):
     NAME = 'FuncServer'
     DESC = 'Default Functionality Server'
@@ -230,8 +270,6 @@ class FuncServer(object):
 
     STATIC_PATH = 'static'
     TEMPLATE_PATH = 'templates'
-
-    STATS_FLUSH_INTERVAL = 1
 
     APP_CLASS = tornado.web.Application
 
@@ -249,7 +287,8 @@ class FuncServer(object):
             quiet=self.args.quiet)
         self.log_id = 0
 
-        self.prep_stats_collection()
+        stats_prefix = '.'.join([x for x in (self.hostname, self.NAME, self.name) if x])
+        self.stats = StatsCollector(stats_prefix, self.args.statsd_server)
 
         # tornado app object
         base_handlers = self.prepare_base_handlers()
@@ -320,36 +359,6 @@ class FuncServer(object):
         for _id in bad_ws: del self.websocks[_id]
 
         self.log_id += 1
-
-    def construct_stats_prefix(self):
-        return '.'.join([x for x in (self.hostname, self.NAME, self.name) if x])
-
-    def prep_stats_collection(self):
-        class DummyStats(object):
-            def __getattr__(self, attr): return self
-            def __call__(self, *args, **kwargs): return self
-
-        self.stats = self._stats = DummyStats()
-
-        server = self.args.statsd_server
-        if not server: return
-
-        port = None
-        if ':' in server:
-            ip, port = server.split(':')
-            port = int(port)
-        else:
-            ip = server
-
-        S = statsd.StatsClient
-        prefix = self.construct_stats_prefix()
-        self._stats = S(ip, port, prefix) if port is not None else S(ip, prefix=prefix)
-        self.stats = self._stats.pipeline()
-
-        def fn():
-            while 1: time.sleep(self.STATS_FLUSH_INTERVAL); self.stats.send()
-
-        self.stats_thread = gevent.spawn(fn)
 
     def dump_stacks(self):
         '''
@@ -468,7 +477,7 @@ class RPCHandler(BaseHandler):
     def _handle_single_call(self, m):
         fn_name = m.get('fn', None)
         sname = 'api.%s' % fn_name
-        t = self.stats.timer(sname).start() if fn_name else None
+        t = time.time()
 
         try:
             fn = self._get_apifn(fn_name)
@@ -481,7 +490,8 @@ class RPCHandler(BaseHandler):
                 (m['fn'], repr(m['args']), repr(m['kwargs'])))
             r = {'success': False, 'result': repr(e)}
         finally:
-            if t is not None: t.stop()
+            tdiff = (time.time() - t) * 1000
+            self.stats.timing(sname, tdiff)
 
         return r
 
