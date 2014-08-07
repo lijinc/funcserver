@@ -247,15 +247,19 @@ class StatsCollector(object):
         self.stats_thread = gevent.spawn(fn)
 
     def incr(self, key, n=1):
+        if self.stats is None: return
         self.cache[key] = self.cache.get(key, 0) + n
 
     def decr(self, key, n=1):
+        if self.stats is None: return
         self.cache[key] = self.cache.get(key, 0) - n
 
     def timing(self, key, ms):
+        if self.stats is None: return
         return self.stats.timing(key, ms)
 
     def send(self):
+        if self.stats is None: return
         p = self.stats.pipeline()
         for k, v in self.cache.iteritems():
             p.incr(k, v)
@@ -487,7 +491,8 @@ class RPCHandler(BaseHandler):
         except Exception, e:
             self.log.exception('Exception during RPC call. '
                 'fn=%s, args=%s, kwargs=%s' % \
-                (m['fn'], repr(m['args']), repr(m['kwargs'])))
+                (m.get('fn', ''), repr(m.get('args', '[]')),
+                    repr(m.get('kwargs', '{}'))))
             r = {'success': False, 'result': repr(e)}
         finally:
             tdiff = (time.time() - t) * 1000
