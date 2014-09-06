@@ -460,7 +460,8 @@ class FuncServer(object):
 
     def start(self):
         self.pre_start()
-        self.app.listen(self.args.port)
+        if self.args.port != 0:
+            self.app.listen(self.args.port)
         tornado.ioloop.IOLoop.instance().start()
 
 class RPCHandler(BaseHandler):
