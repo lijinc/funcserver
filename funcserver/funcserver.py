@@ -266,16 +266,8 @@ class StatsCollector(object):
         p.send()
         self.cache = {}
 
-class FuncServer(object):
-    NAME = 'FuncServer'
-    DESC = 'Default Functionality Server'
-    DEFAULT_PORT = 9345
-    VIRTUAL_HOST = r'.*'
-
-    STATIC_PATH = 'static'
-    TEMPLATE_PATH = 'templates'
-
-    APP_CLASS = tornado.web.Application
+class BaseScript(object):
+    LOG_FORMATTER = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
 
     def __init__(self):
         # argparse parser obj
@@ -283,67 +275,38 @@ class FuncServer(object):
         self.define_baseargs(self.parser)
         self.define_args(self.parser)
         self.args = self.parser.parse_args()
-        self.name = self.args.name
+
         self.hostname = socket.gethostname()
 
-        # prep logger
         self.log = self.init_logger(self.args.log, self.args.log_level,\
             quiet=self.args.quiet)
-        self.log_id = 0
 
-        stats_prefix = '.'.join([x for x in (self.hostname, self.NAME, self.name) if x])
-        self.stats = StatsCollector(stats_prefix, self.args.statsd_server)
+        self.stats = self.create_stats()
+        self.log.debug('init: args=%s' % repr(self.args))
 
-        # tornado app object
-        base_handlers = self.prepare_base_handlers()
-        handlers = self.prepare_handlers()
-        self.template_loader = TemplateLoader([resolve_path(self.TEMPLATE_PATH)])
-        _ = self.prepare_template_loader(self.template_loader)
-        if _ is not None: self.template_loader = _
+    @property
+    def name(self):
+        return '.'.join([x for x in (sys.argv[0].split('.')[0], self.args.name) if x])
 
-        shclass = CustomStaticFileHandler
-        shclass.PATHS.append(resolve_path(self.STATIC_PATH))
-        _ = self.prepare_static_paths(shclass.PATHS)
-        if _ is not None: shclass.PATHS = _
-
-        self.static_handler_class = shclass
-
-        self.nav_tabs = [('Console', '/console'), ('Logs', '/logs')]
-        self.nav_tabs = self.prepare_nav_tabs(self.nav_tabs)
-
-        settings = {
-            'static_path': '<DUMMY-INEXISTENT-PATH>',
-            'static_handler_class': self.static_handler_class,
-            'template_loader': self.template_loader,
-        }
-
-        all_handlers = handlers + base_handlers
-        self.app = self.APP_CLASS(**settings)
-        self.app.add_handlers(self.VIRTUAL_HOST, all_handlers)
-
-        sys.funcserver = self.app.funcserver = self
-
-        # all active websockets and their state
-        self.websocks = {}
+    def create_stats(self):
+        stats_prefix = '.'.join([x for x in (self.hostname, self.name) if x])
+        return StatsCollector(stats_prefix, self.args.statsd_server)
 
     def init_logger(self, fname, log_level, quiet=False):
         if not fname:
-            n = '.'.join([x for x in (self.NAME, self.name) if x])
-            fname = '%s.log' % n
+            fname = '%s.log' % self.name
 
         log = logging.getLogger('')
-        formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
 
         stderr_hdlr = logging.StreamHandler(sys.stderr)
-        weblog_hdlr = WebLogHandler(self)
         rofile_hdlr = logging.handlers.RotatingFileHandler(fname,
             maxBytes=MAX_LOG_FILE_SIZE, backupCount=10)
+        hdlrs = (stderr_hdlr, rofile_hdlr)
 
-        weblog_hdlr.setFormatter(formatter)
-        rofile_hdlr.setFormatter(formatter)
-        stderr_hdlr.setFormatter(formatter)
+        for hdlr in hdlrs:
+            hdlr.setFormatter(self.LOG_FORMATTER)
+            log.addHandler(hdlr)
 
-        log.addHandler(weblog_hdlr)
         log.addHandler(rofile_hdlr)
         if not quiet: log.addHandler(stderr_hdlr)
 
@@ -351,18 +314,20 @@ class FuncServer(object):
 
         return log
 
-    def _send_log(self, msg):
-        msg = {'type': MSG_TYPE_LOG, 'id': self.log_id, 'data': msg}
+    def define_baseargs(self, parser):
+        parser.add_argument('--name', default=None,
+            help='Name to identify this instance')
+        parser.add_argument('--statsd-server', default=None,
+            help='Location of StatsD server to send statistics. '
+                'Format is ip[:port]. Eg: localhost, localhost:8125')
+        parser.add_argument('--log', default=None,
+            help='Name of log file')
+        parser.add_argument('--log-level', default='WARNING',
+            help='Logging level as picked from the logging module')
+        parser.add_argument('--quiet', action='store_true')
 
-        bad_ws = []
-
-        for _id, ws in self.websocks.iteritems():
-            if ws is None: bad_ws.append(_id); continue
-            ws['sock'].send_message(msg)
-
-        for _id in bad_ws: del self.websocks[_id]
-
-        self.log_id += 1
+    def define_args(self, parser):
+        pass
 
     def dump_stacks(self):
         '''
@@ -402,6 +367,81 @@ class FuncServer(object):
 
         return ''.join(dump)
 
+
+class FuncServer(BaseScript):
+    NAME = 'FuncServer'
+    DESC = 'Default Functionality Server'
+    DEFAULT_PORT = 9345
+    VIRTUAL_HOST = r'.*'
+
+    STATIC_PATH = 'static'
+    TEMPLATE_PATH = 'templates'
+
+    APP_CLASS = tornado.web.Application
+
+    def __init__(self):
+        super(FuncServer, self).__init__()
+        self.log_id = 0
+
+        # add weblog handler to logger
+        weblog_hdlr = WebLogHandler(self)
+        weblog_hdlr.setFormatter(self.LOG_FORMATTER)
+        self.log.addHandler(weblog_hdlr)
+
+        # tornado app object
+        base_handlers = self.prepare_base_handlers()
+        handlers = self.prepare_handlers()
+        self.template_loader = TemplateLoader([resolve_path(self.TEMPLATE_PATH)])
+        _ = self.prepare_template_loader(self.template_loader)
+        if _ is not None: self.template_loader = _
+
+        shclass = CustomStaticFileHandler
+        shclass.PATHS.append(resolve_path(self.STATIC_PATH))
+        _ = self.prepare_static_paths(shclass.PATHS)
+        if _ is not None: shclass.PATHS = _
+
+        self.static_handler_class = shclass
+
+        self.nav_tabs = [('Console', '/console'), ('Logs', '/logs')]
+        self.nav_tabs = self.prepare_nav_tabs(self.nav_tabs)
+
+        settings = {
+            'static_path': '<DUMMY-INEXISTENT-PATH>',
+            'static_handler_class': self.static_handler_class,
+            'template_loader': self.template_loader,
+        }
+
+        all_handlers = handlers + base_handlers
+        self.app = self.APP_CLASS(**settings)
+        self.app.add_handlers(self.VIRTUAL_HOST, all_handlers)
+
+        sys.funcserver = self.app.funcserver = self
+
+        # all active websockets and their state
+        self.websocks = {}
+
+    @property
+    def name(self):
+        return '.'.join([x for x in (self.NAME, self.args.name) if x])
+
+    def define_baseargs(self, parser):
+        super(FuncServer, self).define_baseargs(parser)
+        parser.add_argument('--port', default=self.DEFAULT_PORT,
+            type=int, help='port to listen on for server')
+
+    def _send_log(self, msg):
+        msg = {'type': MSG_TYPE_LOG, 'id': self.log_id, 'data': msg}
+
+        bad_ws = []
+
+        for _id, ws in self.websocks.iteritems():
+            if ws is None: bad_ws.append(_id); continue
+            ws['sock'].send_message(msg)
+
+        for _id in bad_ws: del self.websocks[_id]
+
+        self.log_id += 1
+
     def prepare_base_handlers(self):
         # Tornado URL handlers for core functionality
 
@@ -415,23 +455,6 @@ class FuncServer(object):
     def prepare_handlers(self):
         # Tornado URL handlers for additional functionality
         return []
-
-    def define_baseargs(self, parser):
-        parser.add_argument('--name', default=None,
-            help='Name to identify this instance')
-        parser.add_argument('--statsd-server', default=None,
-            help='Location of StatsD server to send statistics. '
-                'Format is ip[:port]. Eg: localhost, localhost:8125')
-        parser.add_argument('--port', default=self.DEFAULT_PORT,
-            type=int, help='port to listen on for server')
-        parser.add_argument('--log', default=None,
-            help='Name of log file')
-        parser.add_argument('--log-level', default='WARNING',
-            help='Logging level as picked from the logging module')
-        parser.add_argument('--quiet', action='store_true')
-
-    def define_args(self, parser):
-        pass
 
     def prepare_template_loader(self, loader):
         # add additional template dirs by using
@@ -456,7 +479,11 @@ class FuncServer(object):
         return self.define_python_namespace()
 
     def pre_start(self):
-        self.log.debug('pre_start: args=%s' % repr(self.args))
+        '''
+        Override to perform any operations
+        before the server loop is started
+        '''
+        pass
 
     def start(self):
         self.pre_start()
