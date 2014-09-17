@@ -278,6 +278,7 @@ class StatsCollector(object):
 
 class BaseScript(object):
     LOG_FORMATTER = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    DESC = 'Base script abstraction'
 
     def __init__(self):
         # argparse parser obj
