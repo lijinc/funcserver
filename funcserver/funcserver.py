@@ -227,6 +227,7 @@ class StatsCollector(object):
 
     def __init__(self, prefix, stats_loc):
         self.cache = {}
+        self.gauge_cache = {}
 
         self.stats = None
         if not stats_loc: return
@@ -258,13 +259,22 @@ class StatsCollector(object):
         if self.stats is None: return
         return self.stats.timing(key, ms)
 
+    def gauge(self, key, n):
+        self.gauge_cache[key] = n
+
     def send(self):
         if self.stats is None: return
         p = self.stats.pipeline()
+
         for k, v in self.cache.iteritems():
             p.incr(k, v)
+
+        for k, v in self.gauge_cache.iteritems():
+            p.gauge(k, v)
+
         p.send()
         self.cache = {}
+        self.gauge_cache = {}
 
 class BaseScript(object):
     LOG_FORMATTER = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
