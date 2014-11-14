@@ -265,7 +265,7 @@ class StatsCollector(object):
         self.gauge_cache[key] = n
 
     def collect_ramusage(self):
-        self.guage('resource.maxrss',
+        self.gauge('resource.maxrss',
             resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
     def send(self):
