@@ -12,6 +12,7 @@ import msgpack
 import cStringIO
 import urlparse
 import argparse
+import resource
 import traceback
 import threading
 from ast import literal_eval
@@ -243,7 +244,10 @@ class StatsCollector(object):
         self.stats = S(ip, port, prefix) if port is not None else S(ip, prefix=prefix)
 
         def fn():
-            while 1: time.sleep(self.STATS_FLUSH_INTERVAL); self.send()
+            while 1:
+                time.sleep(self.STATS_FLUSH_INTERVAL)
+                self._collect_ramusage()
+                self.send()
 
         self.stats_thread = gevent.spawn(fn)
 
@@ -261,6 +265,10 @@ class StatsCollector(object):
 
     def gauge(self, key, n):
         self.gauge_cache[key] = n
+
+    def _collect_ramusage(self):
+        self.gauge('resource.maxrss',
+            resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
     def send(self):
         if self.stats is None: return
