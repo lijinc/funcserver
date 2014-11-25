@@ -245,7 +245,9 @@ class StatsCollector(object):
 
         def fn():
             while 1:
-                time.sleep(self.STATS_FLUSH_INTERVAL); self.collect_ramusage(); self.send()
+                time.sleep(self.STATS_FLUSH_INTERVAL)
+                self._collect_ramusage()
+                self.send()
 
         self.stats_thread = gevent.spawn(fn)
 
@@ -264,8 +266,8 @@ class StatsCollector(object):
     def gauge(self, key, n):
         self.gauge_cache[key] = n
 
-    def collect_ramusage(self):
-        self.guage('resource.maxrss',
+    def _collect_ramusage(self):
+        self.gauge('resource.maxrss',
             resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
     def send(self):
