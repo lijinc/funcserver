@@ -7,7 +7,6 @@ import json
 import time
 import code
 import socket
-import random
 import logging
 import msgpack
 import cStringIO
@@ -586,12 +585,9 @@ class RPCHandler(BaseHandler):
 
     @tornado.web.asynchronous
     def post(self, protocol='default'):
-        ref_int = random.choice(range(0,100000))
-        self.log.debug('Entered post function %d ...' % ref_int)
         m = self.get_deserializer(protocol)(self.request.body)
         fn = m['fn']
         gevent.spawn(lambda: self._handle_call(fn, m, protocol))
-        self.log.debug('Quitting post function %d ...' % ref_int)
 
     def failsafe_json_decode(self, v):
         try: v = json.loads(v)
@@ -600,15 +596,12 @@ class RPCHandler(BaseHandler):
 
     @tornado.web.asynchronous
     def get(self, protocol='default'):
-        ref_int = random.choice(range(0,100000))
-        self.log.debug('Entered get function %d ...' % ref_int)
         D = self.failsafe_json_decode
         args = dict([(k, D(v[0])) for k, v in self.request.arguments.iteritems()])
 
         fn = args.pop('fn')
         m = dict(kwargs=args, fn=fn, args=[])
         gevent.spawn(lambda: self._handle_call(fn, m, protocol))
-        self.log.debug('Quitting get function %d ...' % ref_int)
 
 class RPCServer(FuncServer):
     NAME = 'RPCServer'
