@@ -266,7 +266,7 @@ class StatsCollector(object):
     def gauge(self, key, n, delta=False):
         if delta:
             n = self.gauge_cache.get(key, 0) + n
-        self.gauge_cache[key] = n
+        self.gauge_cache[key] = (n, delta)
 
     def _collect_ramusage(self):
         self.gauge('resource.maxrss',
@@ -279,8 +279,8 @@ class StatsCollector(object):
         for k, v in self.cache.iteritems():
             p.incr(k, v)
 
-        for k, v in self.gauge_cache.iteritems():
-            p.gauge(k, v)
+        for k, (v, d) in self.gauge_cache.iteritems():
+            p.gauge(k, v, d)
 
         p.send()
         self.cache = {}
