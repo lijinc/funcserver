@@ -264,7 +264,9 @@ class StatsCollector(object):
         return self.stats.timing(key, ms)
 
     def gauge(self, key, n, delta=False):
-        self.gauge_cache[key] = (n, delta)
+        if delta:
+            n = self.gauge_cache.get(key, 0) + n
+        self.gauge_cache[key] = n
 
     def _collect_ramusage(self):
         self.gauge('resource.maxrss',
@@ -277,8 +279,8 @@ class StatsCollector(object):
         for k, v in self.cache.iteritems():
             p.incr(k, v)
 
-        for k, (v, d) in self.gauge_cache.iteritems():
-            p.gauge(k, v, d)
+        for k, v in self.gauge_cache.iteritems():
+            p.gauge(k, v)
 
         p.send()
         self.cache = {}
