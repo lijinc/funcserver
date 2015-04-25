@@ -266,7 +266,7 @@ class StatsCollector(object):
     def gauge(self, key, n, delta=False):
         if delta:
             v, _ = self.gauge_cache.get(key, (0, True))
-            n = v + n
+            n += v
         self.gauge_cache[key] = (n, delta)
 
     def _collect_ramusage(self):
