@@ -603,7 +603,7 @@ class RPCHandler(BaseHandler):
                 r.append(_r)
 
         
-        fnobj = self._get_apifn(fn_name)
+        fnobj = self._get_apifn(fn)
         if 'raw' not in get_fn_tags(fnobj):
             r = self.get_serializer(protocol)(r)
 
