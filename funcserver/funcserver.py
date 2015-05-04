@@ -72,7 +72,7 @@ def raw(mime='application/octet-stream'):
         tags = getattr(fn, 'tags', set())
         tags.add('raw')
         fn.tags = tags
-        fn.mime = getattr(fn, 'mime', mime):
+        fn.mime = getattr(fn, 'mime', mime)
         return fn
     return dfn
 
