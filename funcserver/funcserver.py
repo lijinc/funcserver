@@ -36,6 +36,47 @@ MAX_LOG_FILE_SIZE = 100 * 1024 * 1024 # 100MB
 # otherwise it swamps with too many logs
 logging.getLogger('requests').setLevel(logging.WARNING)
 
+def tag(*tags):
+    '''
+    Constructs a decorator that tags a function with specified
+    strings (@tags). The tags on the decorated function are
+    available via fn.tags
+    '''
+    def dfn(fn):
+        _tags = getattr(fn, 'tags', set())
+        _tags.update(tags)
+        fn.tags = _tags
+        return fn 
+    return dfn 
+
+def get_fn_tags(fn):
+    return getattr(fn, 'tags', set())
+
+def mime(mime):
+    '''
+    Constructs a decorator that sets the preferred mime type
+    to be written in the http response when returning the
+    function result.
+    '''
+    def dfn(fn):
+        fn.mime = mime
+        return fn 
+    return dfn 
+
+def raw(mime='application/octet-stream'):
+    '''
+    Constructs a decorator that marks the fn
+    as raw response format
+    '''
+    def dfn(fn):
+        tags = getattr(fn, 'tags', set())
+        tags.add('raw')
+        fn.tags = tags
+        if not getattr(fn, 'mime'):
+            fn.mime = mime
+        return fn
+    return dfn
+
 class RPCCallException(Exception):
     pass
 
@@ -537,7 +578,8 @@ class RPCHandler(BaseHandler):
             fn = self._get_apifn(fn_name)
             self.stats.incr(sname)
             r = fn(*m['args'], **m['kwargs'])
-            r = {'success': True, 'result': r}
+            if 'raw' not in get_fn_tags(fn):
+                r = {'success': True, 'result': r}
         except Exception, e:
             self.log.exception('Exception during RPC call. '
                 'fn=%s, args=%s, kwargs=%s' % \
@@ -557,11 +599,17 @@ class RPCHandler(BaseHandler):
             r = []
             for call in m['calls']:
                 _r = self._handle_single_call(call)
-                _r = _r['result'] if _r['success'] else None
+                if isinstance(_r, dict) and 'success' in _r:
+                    _r = _r['result'] if _r['success'] else None
                 r.append(_r)
 
-        r = self.get_serializer(protocol)(r)
-        self.set_header('Content-Type', self.get_mime(protocol))
+        
+        fnobj = self._get_apifn(fn_name)
+        if 'raw' not in get_fn_tags(fnobj):
+            r = self.get_serializer(protocol)(r)
+
+        mime = getattr(fnobj, 'mime', self.get_mime(protocol))
+        self.set_header('Content-Type', mime)
         self.set_header('Content-Length', len(r))
 
         chunk_size = self.WRITE_CHUNK_SIZE
