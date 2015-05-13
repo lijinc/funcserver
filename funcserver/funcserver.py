@@ -321,7 +321,7 @@ class StatsCollector(object):
             p.incr(k, v)
 
         for k, (v, d) in self.gauge_cache.iteritems():
-            p.gauge(k, v, d)
+            p.gauge(k, v, delta=d)
 
         p.send()
         self.cache = {}
