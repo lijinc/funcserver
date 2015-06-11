@@ -576,7 +576,7 @@ class RPCHandler(BaseHandler):
         # Do not do the cleaning if server config
         # doesnt ask to ignore
         if not self.server.IGNORE_UNEXPECTED_KWARGS:
-            return
+            return kwargs
 
         expected_kwargs = set(inspect.getargspec(fn).args)
         got_kwargs = set(kwargs.keys())
