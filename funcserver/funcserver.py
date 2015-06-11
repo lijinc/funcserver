@@ -568,6 +568,24 @@ class RPCHandler(BaseHandler):
             obj = getattr(obj, part)
         return obj
 
+    def _clean_kwargs(self, kwargs, fn):
+        '''
+        Remove unexpected keyword arguments from the
+        set of received keyword arguments.
+        '''
+        # Do not do the cleaning if server config
+        # doesnt ask to ignore
+        if not self.server.IGNORE_UNEXPECTED_KWARGS:
+            return
+
+        expected_kwargs = set(inspect.getargspec(fn).args)
+        got_kwargs = set(kwargs.keys())
+        unexpected_kwargs = got_kwargs - expected_kwargs
+        for k in unexpected_kwargs:
+            del kwargs[k]
+
+        return kwargs
+
     def _handle_single_call(self, m):
         fn_name = m.get('fn', None)
         sname = 'api.%s' % fn_name
@@ -576,7 +594,7 @@ class RPCHandler(BaseHandler):
         try:
             fn = self._get_apifn(fn_name)
             self.stats.incr(sname)
-            r = fn(*m['args'], **m['kwargs'])
+            r = fn(*m['args'], **self._clean_kwargs(m['kwargs'], fn))
             if 'raw' not in get_fn_tags(fn):
                 r = {'success': True, 'result': r}
         except Exception, e:
@@ -602,7 +620,7 @@ class RPCHandler(BaseHandler):
                     _r = _r['result'] if _r['success'] else None
                 r.append(_r)
 
-        
+
         fnobj = self._get_apifn(fn)
         if 'raw' not in get_fn_tags(fnobj):
             r = self.get_serializer(protocol)(r)
@@ -660,6 +678,8 @@ class RPCServer(FuncServer):
     SERIALIZER = staticmethod(msgpack.packb)
     DESERIALIZER = staticmethod(msgpack.unpackb)
     MIME = 'application/x-msgpack'
+
+    IGNORE_UNEXPECTED_KWARGS = False
 
     def __init__(self, *args, **kwargs):
         super(RPCServer, self).__init__(*args, **kwargs)
