@@ -7,6 +7,7 @@ import json
 import time
 import code
 import socket
+import inspect
 import logging
 import msgpack
 import cStringIO
