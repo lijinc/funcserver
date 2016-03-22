@@ -472,6 +472,7 @@ class FuncServer(BaseScript):
             'static_path': '<DUMMY-INEXISTENT-PATH>',
             'static_handler_class': self.static_handler_class,
             'template_loader': self.template_loader,
+            'compress_response': True,
         }
 
         all_handlers = handlers + base_handlers
